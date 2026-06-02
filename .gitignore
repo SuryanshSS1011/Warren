@@ -34,8 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
-# docs (managed separately)
-/docs/
+# docs (managed separately; allowlist what's committed)
+/docs/*
+!/docs/BUILD_PLAN.md
+!/docs/STORY.md
 
 # vercel
 .vercel
