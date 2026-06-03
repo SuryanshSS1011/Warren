@@ -5,8 +5,15 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ title: string }> }
 ) {
+  
+
   const { title: rawTitle } = await params;
-  const title = decodeURIComponent(rawTitle);
+    let title: string;
+    try {
+    title = decodeURIComponent(rawTitle);
+    } catch {
+        return NextResponse.json({ error: "Invalid title" }, { status: 400 });
+    }
 
   try {
     
