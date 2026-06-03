@@ -11,12 +11,16 @@ const ServerEnv = z
     WIKIPEDIA_USER_AGENT: z.string().min(1),
   })
   .refine(
-    (e) => (e.AI_PROVIDER === "anthropic" ? !!e.ANTHROPIC_API_KEY : !!e.GEMINI_API_KEY),
-    {
-      message: "Missing API key for the selected AI_PROVIDER",
-      path: ["AI_PROVIDER"],
-    },
-  );
+  (e) => {
+    // Only validate AI key if AI features are actually being used
+    if (!e.ANTHROPIC_API_KEY && !e.GEMINI_API_KEY) return true;
+    return e.AI_PROVIDER === "anthropic" ? !!e.ANTHROPIC_API_KEY : !!e.GEMINI_API_KEY;
+  },
+  {
+    message: "Missing API key for the selected AI_PROVIDER",
+    path: ["AI_PROVIDER"],
+  },
+);
 
 let cached: z.infer<typeof ServerEnv> | undefined;
 

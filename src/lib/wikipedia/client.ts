@@ -39,8 +39,27 @@ export async function getPageSummary(title: string): Promise<PageSummary | null>
   return (await res.json()) as PageSummary;
 }
 
-export async function getRelated(title: string) {
-  const res = await wikiFetch(`/page/related/${encodeURIComponent(title)}`);
-  if (!res.ok) return { pages: [] as PageSummary[] };
-  return (await res.json()) as { pages: PageSummary[] };
+export async function getArticleLinks(title: string): Promise<PageSummary[]> {
+  // Use the Action API to get parsed HTML, then extract wiki links
+  const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=links&pllimit=20&plnamespace=0&format=json&origin=*`;
+  
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Warren/0.1 (https://warren.app; team@warren.app)",
+    },
+    next: { revalidate: 60 * 60 * 24 },
+  });
+
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const pages = Object.values(data.query.pages) as any[];
+  const links = pages[0]?.links ?? [];
+
+  // Return in PageSummary shape with just titles — we fetch full summaries lazily
+  return links.map((l: { title: string }) => ({
+    title: l.title,
+    extract: "",
+    type: "standard",
+  }));
 }
