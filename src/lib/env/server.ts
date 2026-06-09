@@ -7,8 +7,13 @@ const ServerEnv = z
     ANTHROPIC_MODEL: z.string().default("claude-haiku-4-5-20251001"),
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
-    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+    // New Supabase key format: server-only secret key (sb_secret_…). Replaces the legacy
+    // service_role JWT. Optional so the app boots without persistence configured.
+    SUPABASE_SECRET_KEY: z.string().min(1).optional(),
     WIKIPEDIA_USER_AGENT: z.string().min(1),
+    // Upstash Redis (optional). When unset, caching is a no-op so dev still works.
+    UPSTASH_REDIS_REST_URL: z.string().min(1).optional(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   })
   .refine(
     (e) => (e.AI_PROVIDER === "anthropic" ? !!e.ANTHROPIC_API_KEY : !!e.GEMINI_API_KEY),
