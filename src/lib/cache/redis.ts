@@ -44,15 +44,24 @@ export async function cacheSet<T>(key: string, value: T, ttlSeconds: number): Pr
   }
 }
 
-/** Read-through helper: return cached value or compute, cache, and return it. */
+// Stored values are wrapped in an envelope so a cached `null`/`undefined` (a valid
+// negative result, e.g. a Wikipedia 404) is distinguishable from a cache miss — otherwise
+// negatives would never cache and would re-hit upstream on every request.
+type Envelope<T> = { v: T };
+
+/** Read-through helper: return cached value (incl. cached negatives) or compute + cache.
+    `negativeTtlSeconds` caps how long falsy/empty results are cached (default: 5 min) so a
+    transiently-missing page isn't pinned for the full TTL. */
 export async function cached<T>(
   key: string,
   ttlSeconds: number,
   compute: () => Promise<T>,
+  negativeTtlSeconds = 300,
 ): Promise<T> {
-  const hit = await cacheGet<T>(key);
-  if (hit !== null) return hit;
+  const hit = await cacheGet<Envelope<T>>(key);
+  if (hit && typeof hit === "object" && "v" in hit) return hit.v;
   const value = await compute();
-  await cacheSet(key, value, ttlSeconds);
+  const isNegative = value == null || (Array.isArray(value) && value.length === 0);
+  await cacheSet<Envelope<T>>(key, { v: value }, isNegative ? negativeTtlSeconds : ttlSeconds);
   return value;
 }

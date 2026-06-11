@@ -54,10 +54,15 @@ export async function saveWarren(
     spine: e.spine,
   }));
 
-  const [{ error: nErr }, { error: eErr }] = await Promise.all([
-    db.from("node").insert(nodeRows),
-    edgeRows.length ? db.from("edge").insert(edgeRows) : Promise.resolve({ error: null }),
-  ]);
+  // Insert nodes BEFORE edges: the edge composite FKs require both endpoints to already
+  // exist as nodes in the same warren.
+  const { error: nErr } = await db.from("node").insert(nodeRows);
+  const { error: eErr } = nErr
+    ? { error: null }
+    : edgeRows.length
+      ? await db.from("edge").insert(edgeRows)
+      : { error: null };
+
   // Compensating delete: if children fail after the parent row landed, roll back the
   // warren so we never persist an orphan/empty graph (the ON DELETE CASCADE also clears
   // any node/edge rows that did insert). Supabase has no client-side transaction.

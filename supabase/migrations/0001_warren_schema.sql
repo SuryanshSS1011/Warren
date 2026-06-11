@@ -35,7 +35,12 @@ create table if not exists edge (
   target      text not null,
   bridge      text,
   spine       boolean not null default false,
-  primary key (warren_id, source, target)
+  primary key (warren_id, source, target),
+  -- both endpoints must be real nodes in the same warren (self-validating graph)
+  constraint edge_source_node_fk foreign key (warren_id, source)
+    references node (warren_id, id) on delete cascade,
+  constraint edge_target_node_fk foreign key (warren_id, target)
+    references node (warren_id, id) on delete cascade
 );
 
 create index if not exists warren_owner_idx  on warren (owner_id);

@@ -22,9 +22,16 @@ function sleep(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
 
-/** Fetch through the queue, retrying on 429 (honoring Retry-After) and 5xx with backoff. */
-async function wikiFetch(url: string, init?: RequestInit): Promise<Response> {
+/** Fetch through the queue, retrying on 429 (honoring Retry-After) and 5xx with backoff.
+    `revalidate` is the per-call Next fetch-cache TTL (seconds); pass the right one per
+    endpoint instead of inheriting a single hard-coded value. */
+async function wikiFetch(
+  url: string,
+  opts?: { revalidate?: number; init?: RequestInit },
+): Promise<Response> {
   const { WIKIPEDIA_USER_AGENT } = getServerEnv();
+  const init = opts?.init;
+  const revalidate = opts?.revalidate ?? SUMMARY_TTL;
   const headers = {
     "User-Agent": WIKIPEDIA_USER_AGENT,
     "Api-User-Agent": WIKIPEDIA_USER_AGENT,
@@ -38,7 +45,7 @@ async function wikiFetch(url: string, init?: RequestInit): Promise<Response> {
       const res = await fetch(url, {
         ...init,
         headers,
-        next: { revalidate: SUMMARY_TTL },
+        next: { revalidate },
       });
       if (res.status !== 429 && res.status < 500) return res;
       if (attempt === maxAttempts) return res;
@@ -52,7 +59,7 @@ async function wikiFetch(url: string, init?: RequestInit): Promise<Response> {
       await sleep(backoff);
     }
     // unreachable, but satisfies the type checker
-    return fetch(url, { ...init, headers });
+    return fetch(url, { ...init, headers, next: { revalidate } });
   };
 
   const result = await queue.add(run);
@@ -104,7 +111,9 @@ export async function getArticleLinks(title: string, limit = 40): Promise<BlueLi
       redirects: "1",
       origin: "*",
     });
-    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`);
+    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, {
+      revalidate: LINKS_TTL,
+    });
     if (!res.ok) return [];
     const data = (await res.json()) as {
       query?: { pages?: Record<string, { links?: { title: string }[] }> };
