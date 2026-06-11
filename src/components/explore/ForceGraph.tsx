@@ -589,6 +589,7 @@ export default function ForceGraph(props: ForceGraphProps) {
                 key={edgeKey(e)}
                 ref={(el) => {
                   if (el) lineRefs.current.set(edgeKey(e), el);
+                  else lineRefs.current.delete(edgeKey(e));
                 }}
                 className={cls}
                 style={e.spine ? { stroke: accent } : undefined}
@@ -618,7 +619,9 @@ export default function ForceGraph(props: ForceGraphProps) {
               detail={detail}
               accent={accent}
               registerPos={(el) => {
+                // delete the entry on unmount so paint() never iterates a stale element
                 if (el) posRefs.current.set(n.id, el);
+                else posRefs.current.delete(n.id);
               }}
               onDown={(ev) => onPointerDownNode(ev, n.id)}
             />

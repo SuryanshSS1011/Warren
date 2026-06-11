@@ -58,8 +58,13 @@ export async function saveWarren(
     db.from("node").insert(nodeRows),
     edgeRows.length ? db.from("edge").insert(edgeRows) : Promise.resolve({ error: null }),
   ]);
-  if (nErr) throw new Error(`save nodes: ${nErr.message}`);
-  if (eErr) throw new Error(`save edges: ${eErr.message}`);
+  // Compensating delete: if children fail after the parent row landed, roll back the
+  // warren so we never persist an orphan/empty graph (the ON DELETE CASCADE also clears
+  // any node/edge rows that did insert). Supabase has no client-side transaction.
+  if (nErr || eErr) {
+    await db.from("warren").delete().eq("id", warrenId);
+    throw new Error(`save graph: ${(nErr ?? eErr)!.message}`);
+  }
 
   return { id: warrenId };
 }

@@ -47,6 +47,8 @@ async function wikiFetch(url: string, init?: RequestInit): Promise<Response> {
       const backoff = Number.isFinite(retryAfter) && retryAfter > 0
         ? retryAfter * 1000
         : Math.min(8000, 2 ** attempt * 250) + Math.random() * 200;
+      // Drain/cancel the discarded response so undici doesn't leak the socket on retry.
+      await res.body?.cancel().catch(() => {});
       await sleep(backoff);
     }
     // unreachable, but satisfies the type checker

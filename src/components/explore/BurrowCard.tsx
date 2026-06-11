@@ -85,7 +85,7 @@ export default function BurrowCard({
             style={{ background: `oklch(0.72 0.15 ${h})` }}
           />
           {cat}
-          <span className={styles.burrowSrc}>Wikipedia · summary</span>
+          <span className={styles.burrowSrc}>{live ? "Wikipedia · summary" : "Warren · preview"}</span>
         </div>
         <h2 className={styles.burrowTitle}>{article.title}</h2>
         <p className={styles.burrowBlurb}>{article.blurb}</p>
