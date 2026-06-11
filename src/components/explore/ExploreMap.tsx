@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import Link from "next/link";
 import styles from "@/app/explore.module.css";
 import { byId, hueOf, START_ID, type CategoryName } from "@/lib/explore/corpus";
 import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
@@ -367,6 +368,9 @@ export default function ExploreMap() {
         <button className={styles.ctl} onClick={handleShare} disabled={saving}>
           {saving ? "Sharing…" : "↗ Share"}
         </button>
+        <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
+          ◫ Gallery
+        </Link>
         {ACCENT_SWATCHES.map((c) => (
           <button
             key={c}

@@ -101,3 +101,52 @@ export const loadWarren = cache(async (id: string): Promise<SavedWarren | null> 
     })),
   };
 });
+
+/** A lightweight gallery row — enough to render a mini-trail thumbnail + stats card. */
+export type WarrenCard = {
+  id: string;
+  title: string;
+  stats: { hops: number; categories: number; minutes: number; stars: number };
+  createdAt: number;
+  /** ordered category per spine node, for the mini-trail colors */
+  trail: { title: string; category: string }[];
+};
+
+/** Public warrens for the gallery, newest first. Returns [] without Supabase. */
+export async function listPublicWarrens(limit = 24): Promise<WarrenCard[]> {
+  const db = getAdminClient();
+  if (!db) return [];
+
+  const { data: warrens, error } = await db
+    .from("warren")
+    .select("id, title, spine, stats, created_at")
+    .eq("is_public", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !warrens?.length) return [];
+
+  // One batched node fetch for all warrens, then map spine ids → {title, category}.
+  const ids = warrens.map((w) => w.id);
+  const { data: nodes } = await db
+    .from("node")
+    .select("warren_id, id, title, category")
+    .in("warren_id", ids);
+
+  const nodeBy = new Map<string, { title: string; category: string }>();
+  for (const n of nodes ?? []) {
+    nodeBy.set(`${n.warren_id}:${n.id}`, {
+      title: n.title,
+      category: n.category ?? "Physics",
+    });
+  }
+
+  return warrens.map((w) => ({
+    id: w.id,
+    title: w.title ?? "Untitled warren",
+    stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
+    createdAt: new Date(w.created_at).getTime(),
+    trail: ((w.spine ?? []) as string[])
+      .map((nid) => nodeBy.get(`${w.id}:${nid}`))
+      .filter(Boolean) as { title: string; category: string }[],
+  }));
+}

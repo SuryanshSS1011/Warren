@@ -1,0 +1,214 @@
+/* Warren — public gallery. Featured + trending warrens as cards with mini-trail
+   thumbnails. Star Chart aesthetic, scrollable (unlike the fixed Explore screen). */
+
+.root {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  background:
+    radial-gradient(1000px 700px at 80% -5%, rgba(160, 120, 60, 0.1), transparent 60%),
+    radial-gradient(900px 800px at 10% 100%, rgba(70, 80, 150, 0.12), transparent 60%),
+    var(--bg-0);
+  color: var(--ink);
+  padding: 0 0 80px;
+}
+
+.header {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 40px 28px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.logo {
+  color: var(--ink);
+  filter: drop-shadow(0 0 6px color-mix(in oklab, var(--accent), transparent 55%));
+}
+.brandName {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+.brandTag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-top: 3px;
+}
+.cta {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 18px;
+  border-radius: 11px;
+  text-decoration: none;
+  color: var(--accent-hi);
+  background: color-mix(in oklab, var(--accent), transparent 82%);
+  border: 1px solid color-mix(in oklab, var(--accent), transparent 50%);
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.cta:hover {
+  background: color-mix(in oklab, var(--accent), transparent 74%);
+  transform: translateY(-1px);
+}
+
+.hero {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 28px 8px;
+}
+.heroTitle {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  margin: 0;
+  max-width: 16ch;
+  text-wrap: balance;
+}
+.heroAccent {
+  font-style: italic;
+  color: var(--accent);
+}
+.heroSub {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  margin: 14px 0 0;
+  max-width: 52ch;
+}
+
+.section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 36px 28px 0;
+}
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.sectionTitle {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.sectionNote {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(22, 22, 38, 0.72), rgba(12, 12, 24, 0.82));
+  text-decoration: none;
+  color: inherit;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.1),
+    border-color 0.2s,
+    box-shadow 0.25s;
+}
+.card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--accent), transparent 60%);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.cardThumb {
+  height: 150px;
+  position: relative;
+  border-bottom: 1px solid var(--line-soft);
+  background:
+    radial-gradient(400px 200px at 70% 0%, rgba(160, 120, 60, 0.08), transparent),
+    var(--bg-1);
+}
+.cardBody {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cardTitle {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.cardStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.cardStats b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.cardSep {
+  color: var(--ink-faint);
+}
+.cardStars {
+  margin-left: auto;
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+.cardStarOff {
+  color: rgba(244, 239, 227, 0.18);
+}
+
+.empty {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 28px;
+}
+.emptyCard {
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  padding: 36px 28px;
+  text-align: center;
+  color: var(--ink-dim);
+}
+.emptyCard h3 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 22px;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+.emptyCard code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-hi);
+}
