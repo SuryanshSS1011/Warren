@@ -13,8 +13,11 @@ or not exists (
 
 do $$
 begin
+  -- Scope the existence check to the `edge` table (constraint names aren't globally
+  -- unique, so a same-named constraint on another table must not make us skip this).
   if not exists (
-    select 1 from pg_constraint where conname = 'edge_source_node_fk'
+    select 1 from pg_constraint
+    where conname = 'edge_source_node_fk' and conrelid = 'edge'::regclass
   ) then
     alter table edge
       add constraint edge_source_node_fk
@@ -22,7 +25,8 @@ begin
   end if;
 
   if not exists (
-    select 1 from pg_constraint where conname = 'edge_target_node_fk'
+    select 1 from pg_constraint
+    where conname = 'edge_target_node_fk' and conrelid = 'edge'::regclass
   ) then
     alter table edge
       add constraint edge_target_node_fk

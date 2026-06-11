@@ -67,6 +67,11 @@ async function wikiFetch(
   return result;
 }
 
+/** Cancel a response body we won't read, so undici frees the socket for keep-alive reuse. */
+function discard(res: Response): void {
+  void res.body?.cancel().catch(() => {});
+}
+
 export type PageSummary = {
   title: string;
   description?: string;
@@ -80,15 +85,24 @@ export type PageSummary = {
 export async function getPageSummary(title: string): Promise<PageSummary | null> {
   return cached(`wiki:summary:${title}`, SUMMARY_TTL, async () => {
     const res = await wikiFetch(`${REST_BASE}/page/summary/${encodeURIComponent(title)}`);
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Wikipedia summary ${title}: ${res.status}`);
+    if (res.status === 404) {
+      discard(res);
+      return null;
+    }
+    if (!res.ok) {
+      discard(res);
+      throw new Error(`Wikipedia summary ${title}: ${res.status}`);
+    }
     return (await res.json()) as PageSummary;
   });
 }
 
 export async function getRelated(title: string): Promise<{ pages: PageSummary[] }> {
   const res = await wikiFetch(`${REST_BASE}/page/related/${encodeURIComponent(title)}`);
-  if (!res.ok) return { pages: [] };
+  if (!res.ok) {
+    discard(res);
+    return { pages: [] };
+  }
   return (await res.json()) as { pages: PageSummary[] };
 }
 
@@ -114,7 +128,10 @@ export async function getArticleLinks(title: string, limit = 40): Promise<BlueLi
     const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, {
       revalidate: LINKS_TTL,
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      discard(res);
+      return [];
+    }
     const data = (await res.json()) as {
       query?: { pages?: Record<string, { links?: { title: string }[] }> };
     };
