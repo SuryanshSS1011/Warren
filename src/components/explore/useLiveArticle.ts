@@ -16,8 +16,11 @@ export function useLiveArticle(title: string | null) {
       dedupingInterval: 1000 * 60 * 10,
     },
   );
+  // A disambiguation response carries no usable extract/thumbnail — treat it as "no live
+  // data" so the burrow card falls back to the offline corpus instead of rendering empty.
+  const usable = data && data.type !== "disambiguation" ? data : null;
   return {
-    live: error ? null : (data ?? null),
+    live: error ? null : usable,
     isLoading,
   };
 }
