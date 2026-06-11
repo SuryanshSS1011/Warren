@@ -8,22 +8,11 @@ import {
 } from "react";
 import styles from "@/app/explore.module.css";
 import { hueOf, labelOf } from "@/lib/explore/corpus";
-import type { GraphApi, GraphEdge, GraphNode } from "./types";
+import { detailFor, LOD, type GraphEdge, type GraphEngineProps, type GraphNode } from "./types";
 
-type ForceGraphProps = {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  selectedId: string | null;
-  spineIds: string[];
-  newestId: string | null;
-  accent: string;
-  showAllLabels: boolean;
-  dimmed: boolean;
-  reserveRight: number;
-  reserveBottom: number;
-  onSelect: (id: string) => void;
-  onReady: (api: GraphApi) => void;
-};
+// The DOM-tile implementation of the graph engine seam. Must satisfy GraphEngineProps so
+// a future canvas engine can drop in unchanged (see types.ts and the migration task).
+type ForceGraphProps = GraphEngineProps;
 
 type NodeTileProps = {
   node: GraphNode;
@@ -32,6 +21,8 @@ type NodeTileProps = {
   width: number;
   hue: number;
   labelOn: boolean;
+  /** "dot" collapses the tile to a small node at high node counts (level-of-detail) */
+  detail: "tile" | "dot";
   accent: string;
   registerPos: (el: HTMLDivElement | null) => void;
   onDown: (ev: ReactPointerEvent) => void;
@@ -46,6 +37,7 @@ function NodeTile({
   width,
   hue,
   labelOn,
+  detail,
   accent,
   registerPos,
   onDown,
@@ -58,6 +50,24 @@ function NodeTile({
     const t = setTimeout(() => el.classList.remove(styles.born), 780);
     return () => clearTimeout(t);
   }, []);
+
+  // Level-of-detail: at high node counts, non-spine/non-selected nodes collapse to a
+  // compact dot (optionally labeled) so the DOM stays light. Spine/selected stay full.
+  if (detail === "dot") {
+    return (
+      <div ref={registerPos} className={styles.nodePos} onPointerDown={onDown}>
+        <div
+          ref={innerRef}
+          className={`${styles.nodeDot} ${onSpine ? styles.spine : styles.context}`}
+          title={node.title}
+          style={{ "--cat-h": hue, "--accent": accent } as React.CSSProperties}
+        >
+          <span className={styles.nodeDotMark} style={{ background: `oklch(0.72 0.15 ${hue})` }} />
+          {labelOn ? <span className={styles.nodeDotLabel}>{node.title}</span> : null}
+        </div>
+      </div>
+    );
+  }
 
   const cls = [
     styles.node,
@@ -591,6 +601,11 @@ export default function ForceGraph(props: ForceGraphProps) {
         {nodes.map((n) => {
           const onSpine = spineSet.has(n.id);
           const isSel = selectedId === n.id;
+          // Level-of-detail by node count (see types.ts LOD): collapse far nodes to dots,
+          // and force-hide non-spine labels once the graph is dense.
+          const detail = detailFor(nodes.length, { onSpine, isSelected: isSel });
+          const dense = nodes.length > LOD.FORCE_HIDE_LABELS_AT;
+          const labelOn = onSpine || isSel || (showAllLabels && !dense);
           return (
             <NodeTile
               key={n.id}
@@ -599,7 +614,8 @@ export default function ForceGraph(props: ForceGraphProps) {
               isSel={isSel}
               width={sizeFor(n)}
               hue={hueOf(n.category)}
-              labelOn={showAllLabels || onSpine || isSel}
+              labelOn={labelOn}
+              detail={detail}
               accent={accent}
               registerPos={(el) => {
                 if (el) posRefs.current.set(n.id, el);
