@@ -298,9 +298,12 @@ export default function ExploreMap() {
 
   const isMobile = viewportW < MOBILE_BP;
   const reserveRight = selArticle && !isMobile ? 412 : 0;
+  // On mobile, keep the graph framed below the top HUD band (brand + controls + stats)
+  // and above the bottom-sheet burrow so nodes never settle behind the chrome.
+  const reserveTop = isMobile ? 150 : 0;
   const reserveBottom =
     selArticle && isMobile
-      ? Math.round((typeof window !== "undefined" ? window.innerHeight : 700) * 0.52)
+      ? Math.round((typeof window !== "undefined" ? window.innerHeight : 700) * 0.56)
       : 0;
 
   const handleExport = useCallback(() => {
@@ -375,6 +378,7 @@ export default function ExploreMap() {
         dimmed={!!selArticle}
         reserveRight={reserveRight}
         reserveBottom={reserveBottom}
+        reserveTop={reserveTop}
         onSelect={handleSelect}
         onReady={handleReady}
       />

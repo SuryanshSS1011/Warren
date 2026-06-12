@@ -84,6 +84,7 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
         dimmed={false}
         reserveRight={0}
         reserveBottom={0}
+        reserveTop={0}
         onSelect={() => {}}
         onReady={(api) => {
           apiRef.current = api;

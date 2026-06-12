@@ -116,51 +116,108 @@ const NON_ARTICLE_PREFIX = /^(File|Image|Help|Category|Template|Wikipedia|Portal
 const LOW_VALUE_TITLE =
   /(\b(Inc|Ltd|LLC|GmbH|Co|Corporation|Company)\b\.?$)|(\bS\.p\.A\.?$)|(^List of )|(^Index of )|(\((company|disambiguation)\))|(^\d{3,4}$)|(^[A-Z]+ \d)|(English$)/i;
 
-/** The next jumps a reader can burrow into. Prefers Wikipedia's curated "related" pages
-    (genuinely relevant, not alphabetical noise), falling back to in-article links when
-    related is empty. Main namespace only, house-keeping filtered. */
+/** The next jumps a reader can burrow into, ranked by RELEVANCE (not alphabetically):
+      1. Wikipedia's curated "related" pages (best signal when present),
+      2. links that appear in the article's own summary extract (the lead-section links —
+         the most relevant on-ramps a reader actually meets first),
+      3. remaining in-article links.
+    Main namespace only, house-keeping + low-value stubs filtered. */
 export async function getArticleLinks(title: string, limit = 40): Promise<BlueLink[]> {
   return cached(`wiki:links:${title}:${limit}`, LINKS_TTL, async () => {
-    const dedupe = (titles: string[]): BlueLink[] => {
-      const seen = new Set<string>();
-      const out: BlueLink[] = [];
+    const seen = new Set<string>();
+    const out: BlueLink[] = [];
+    const push = (titles: string[]) => {
       for (const t of titles) {
+        if (out.length >= limit) break;
         if (!t || NON_ARTICLE_PREFIX.test(t) || LOW_VALUE_TITLE.test(t) || seen.has(t)) continue;
         seen.add(t);
         out.push({ title: t });
-        if (out.length >= limit) break;
       }
-      return out;
     };
 
-    // 1) Curated related pages (high quality).
-    const related = await getRelated(title);
-    const relatedLinks = dedupe(related.pages.map((p) => p.title));
-    if (relatedLinks.length >= Math.min(6, limit)) return relatedLinks;
+    // Fetch curated related pages, the summary (for extract-ranking), and in-article links
+    // together. Each is independently cached + concurrency-limited.
+    const [related, summary, inTextRaw] = await Promise.all([
+      getRelated(title),
+      getPageSummary(title).catch(() => null),
+      (async () => {
+        const params = new URLSearchParams({
+          action: "query",
+          format: "json",
+          prop: "links",
+          titles: title,
+          plnamespace: "0",
+          pllimit: String(Math.min(limit * 6, 500)),
+          redirects: "1",
+          origin: "*",
+        });
+        const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
+        if (!res.ok) {
+          discard(res);
+          return [] as string[];
+        }
+        const data = (await res.json()) as {
+          query?: { pages?: Record<string, { links?: { title: string }[] }> };
+        };
+        const pages = data.query?.pages ?? {};
+        return Object.values(pages).flatMap((p) => (p.links ?? []).map((l) => l.title));
+      })(),
+    ]);
 
-    // 2) Fall back to (or top up with) the article's in-text links.
+    // 1) curated related
+    push(related.pages.map((p) => p.title));
+
+    // 2) in-text links that the extract actually mentions (lead-section = most relevant)
+    const extract = (summary?.extract ?? "").toLowerCase();
+    if (extract) {
+      push(inTextRaw.filter((t) => extract.includes(t.toLowerCase())));
+    }
+
+    // 3) the rest, ranked by pageview popularity (prominent articles >> obscure stubs),
+    //    which replaces the API's useless alphabetical order with a real relevance signal.
+    if (out.length < limit) {
+      const remaining = inTextRaw.filter(
+        (t) => !seen.has(t) && !NON_ARTICLE_PREFIX.test(t) && !LOW_VALUE_TITLE.test(t),
+      );
+      const ranked = await rankByPageviews(Array.from(new Set(remaining)));
+      push(ranked);
+    }
+
+    return out;
+  });
+}
+
+/** Order candidate titles by recent pageview volume (descending). Popular articles are a
+    strong proxy for relevance/prominence; obscure stubs sink. Batches to respect API
+    limits and falls back to the input order if the request fails. */
+async function rankByPageviews(titles: string[]): Promise<string[]> {
+  if (titles.length <= 1) return titles;
+  // The pageviews prop accepts up to 50 titles per query; cap the candidate pool.
+  const pool = titles.slice(0, 150);
+  const views = new Map<string, number>();
+  for (let i = 0; i < pool.length; i += 50) {
+    const batch = pool.slice(i, i + 50);
     const params = new URLSearchParams({
       action: "query",
       format: "json",
-      prop: "links",
-      titles: title,
-      plnamespace: "0",
-      pllimit: String(Math.min(limit * 4, 500)),
+      prop: "pageviews",
+      titles: batch.join("|"),
+      pvipdays: "30",
       redirects: "1",
       origin: "*",
     });
-    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, {
-      revalidate: LINKS_TTL,
-    });
+    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
     if (!res.ok) {
       discard(res);
-      return relatedLinks;
+      continue;
     }
     const data = (await res.json()) as {
-      query?: { pages?: Record<string, { links?: { title: string }[] }> };
+      query?: { pages?: Record<string, { title: string; pageviews?: Record<string, number | null> }> };
     };
-    const pages = data.query?.pages ?? {};
-    const inText = Object.values(pages).flatMap((p) => (p.links ?? []).map((l) => l.title));
-    return dedupe([...relatedLinks.map((l) => l.title), ...inText]);
-  });
+    for (const p of Object.values(data.query?.pages ?? {})) {
+      const total = Object.values(p.pageviews ?? {}).reduce<number>((s, v) => s + (v ?? 0), 0);
+      views.set(p.title, total);
+    }
+  }
+  return [...pool].sort((a, b) => (views.get(b) ?? 0) - (views.get(a) ?? 0));
 }
