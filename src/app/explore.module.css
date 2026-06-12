@@ -19,6 +19,12 @@
   pointer-events: none;
 }
 
+/* desktop: no scrim (HUD floats over the graph by design). On mobile it becomes a top
+   band that occludes nodes drifting under the controls/stat strip — see @media below. */
+.hudScrim {
+  display: none;
+}
+
 /* ---------- graph ---------- */
 .viewport {
   position: absolute;
@@ -987,6 +993,28 @@
    brand (row 1) → scrollable controls (row 2) → stat strip (row 3), each on its own line
    with no overlap. The graph sits beneath (z-index scale: graph 1 < HUD 10 < sheet 40). */
 @media (max-width: 880px) {
+  /* top band that occludes graph nodes behind the HUD (brand + controls + stats).
+     z 8 = above the graph (1), below the HUD (10). */
+  .hudScrim {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 158px;
+    z-index: 8;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      var(--bg-0) 0%,
+      color-mix(in oklab, var(--bg-0), transparent 6%) 62%,
+      color-mix(in oklab, var(--bg-0), transparent 35%) 86%,
+      transparent 100%
+    );
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+
   /* brand: compact, top-left, single row */
   .header {
     top: 12px;
