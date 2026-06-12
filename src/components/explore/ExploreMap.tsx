@@ -383,6 +383,10 @@ export default function ExploreMap() {
         onReady={handleReady}
       />
 
+      {/* mobile-only backdrop behind the top HUD band so graph nodes that drift up there
+          are occluded instead of bleeding through the controls/stats */}
+      <div className={styles.hudScrim} aria-hidden="true" />
+
       {/* top-left brand + auto-title */}
       <header className={styles.header}>
         <div className={styles.brand}>
