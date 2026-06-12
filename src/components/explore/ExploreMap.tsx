@@ -6,6 +6,7 @@ import Link from "next/link";
 import styles from "@/app/explore.module.css";
 import { byId, hueOf, START_ID, type CategoryName } from "@/lib/explore/corpus";
 import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
+import { fetchBridge, fetchTitle } from "@/lib/explore/api";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
@@ -73,6 +74,8 @@ export default function ExploreMap() {
   const [announce, setAnnounce] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // AI auto-titles keyed by "firstId>lastId"; overlays the canned title when present.
+  const [aiTitles, setAiTitles] = useState<Record<string, string>>({});
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
   const [startedAt] = useState(() => Date.now() - 4 * 60 * 1000);
@@ -94,9 +97,38 @@ export default function ExploreMap() {
     subTimer.current = setTimeout(() => setSubtitle(null), 7000);
   }, []);
 
+  // Refine an edge's bridge with the live AI sentence, then update the edge + (if it's
+  // still the active subtitle) the on-screen subtitle. Falls back silently to the canned
+  // bridge on any error or when AI is unconfigured — the node already rendered optimistically.
+  const refineBridge = useCallback(
+    async (fromId: string, toId: string, fallback: string) => {
+      const from = byId[fromId];
+      const to = byId[toId];
+      if (!from || !to) return;
+      try {
+        const ai = await fetchBridge(
+          { title: from.title, description: from.blurb },
+          { title: to.title, description: to.blurb },
+        );
+        if (!ai || ai === fallback) return;
+        setEdges((prev) =>
+          prev.map((e) =>
+            e.source === fromId && e.target === toId ? { ...e, bridge: ai } : e,
+          ),
+        );
+        // only swap the visible subtitle if it's still showing this hop's fallback
+        setSubtitle((s) => (s && s.text === fallback ? { ...s, text: ai } : s));
+      } catch {
+        // keep the canned bridge — already shown
+      }
+    },
+    [],
+  );
+
   // ---- add a hop ----
   const addHop = useCallback(
     (fromId: string, toId: string, asSpine: boolean) => {
+      const bridge = bridgeFor(fromId, toId); // instant, canned — optimistic
       setPresent((prev) => {
         if (prev.find((p) => p.id === toId)) return prev;
         const fromDepth = (prev.find((p) => p.id === fromId) || { depth: 0 }).depth;
@@ -104,37 +136,40 @@ export default function ExploreMap() {
       });
       setEdges((prev) => {
         if (prev.find((e) => e.source === fromId && e.target === toId)) return prev;
-        return [...prev, { source: fromId, target: toId, spine: asSpine, bridge: bridgeFor(fromId, toId) }];
+        return [...prev, { source: fromId, target: toId, spine: asSpine, bridge }];
       });
       if (asSpine)
         setSpineIds((prev) => (prev[prev.length - 1] === fromId ? [...prev, toId] : prev));
       setNewestId(toId);
       setSelectedId(toId);
-      const bridge = bridgeFor(fromId, toId);
       flashSubtitle(bridge);
       // ARIA live announcement for screen readers (a11y plan: announce each new node).
       setAnnounce(`Added ${byId[toId].title}. ${bridge}`);
+      // then upgrade the canned bridge to the live AI sentence in the background
+      void refineBridge(fromId, toId, bridge);
     },
-    [flashSubtitle],
+    [flashSubtitle, refineBridge],
   );
 
   // ---- chip click ----
   const handleChip = useCallback(
     (fromId: string, toId: string, visited: boolean) => {
       if (visited) {
+        const bridge = bridgeFor(fromId, toId);
         setEdges((prev) =>
           prev.find((e) => e.source === fromId && e.target === toId)
             ? prev
-            : [...prev, { source: fromId, target: toId, spine: false, bridge: bridgeFor(fromId, toId) }],
+            : [...prev, { source: fromId, target: toId, spine: false, bridge }],
         );
         setSelectedId(toId);
         setNewestId(null);
+        void refineBridge(fromId, toId, bridge);
         return;
       }
       const isSpine = spineIds[spineIds.length - 1] === fromId;
       addHop(fromId, toId, isSpine);
     },
-    [spineIds, addHop],
+    [spineIds, addHop, refineBridge],
   );
 
   const handleSelect = useCallback((id: string) => {
@@ -234,7 +269,26 @@ export default function ExploreMap() {
     return sp ? sp.bridge : null;
   })();
 
-  const autoTitle = titleFor(spineIds);
+  // Canned title is instant; an AI title overlays it when available (keyed by first→last
+  // so it re-fetches only when the journey's endpoints change). Falls back to canned.
+  const cannedTitle = titleFor(spineIds);
+  const titleKey = spineIds.length >= 2 ? `${spineIds[0]}>${spineIds[spineIds.length - 1]}` : "";
+  useEffect(() => {
+    if (!titleKey) return;
+    let cancelled = false;
+    const titles = spineIds.map((id) => byId[id]?.title).filter(Boolean) as string[];
+    fetchTitle(titles)
+      .then((t) => {
+        if (!cancelled && t) setAiTitles((m) => ({ ...m, [titleKey]: t }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleKey]);
+  const autoTitle = (titleKey && aiTitles[titleKey]) || cannedTitle;
+
   const badge = badgeFor(spineIds, nodes.length);
   const hops = Math.max(0, spineIds.length - 1);
   const cats = new Set(nodes.map((n) => n.category)).size;
