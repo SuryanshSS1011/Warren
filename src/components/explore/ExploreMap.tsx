@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
-import { byId, hueOf, START_ID, type CategoryName } from "@/lib/explore/corpus";
+import { hueOf, START_ID } from "@/lib/explore/corpus";
+import { placeholder, resolve } from "@/lib/explore/article-store";
 import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
@@ -87,8 +88,8 @@ export default function ExploreMap() {
   const presentIds = new Set(present.map((p) => p.id));
 
   const nodes: GraphNode[] = present.map((p) => {
-    const a = byId[p.id];
-    return { id: p.id, depth: p.depth, category: a.category as CategoryName, title: a.title };
+    const a = resolve(p.id) ?? placeholder(p.id);
+    return { id: p.id, depth: p.depth, category: a.category, title: a.title };
   });
 
   const flashSubtitle = useCallback((text: string) => {
@@ -102,9 +103,9 @@ export default function ExploreMap() {
   // bridge on any error or when AI is unconfigured — the node already rendered optimistically.
   const refineBridge = useCallback(
     async (fromId: string, toId: string, fallback: string) => {
-      const from = byId[fromId];
-      const to = byId[toId];
-      if (!from || !to) return;
+      const from = resolve(fromId);
+      const to = resolve(toId) ?? placeholder(toId);
+      if (!from) return;
       try {
         const ai = await fetchBridge(
           { title: from.title, description: from.blurb },
@@ -144,7 +145,7 @@ export default function ExploreMap() {
       setSelectedId(toId);
       flashSubtitle(bridge);
       // ARIA live announcement for screen readers (a11y plan: announce each new node).
-      setAnnounce(`Added ${byId[toId].title}. ${bridge}`);
+      setAnnounce(`Added ${(resolve(toId) ?? placeholder(toId)).title}. ${bridge}`);
       // then upgrade the canned bridge to the live AI sentence in the background
       void refineBridge(fromId, toId, bridge);
     },
@@ -261,7 +262,7 @@ export default function ExploreMap() {
   }, [accent]);
 
   // ---- derived ----
-  const selArticle = selectedId ? byId[selectedId] : null;
+  const selArticle = selectedId ? (resolve(selectedId) ?? placeholder(selectedId)) : null;
   const incomingBridge = (() => {
     if (!selectedId) return null;
     const ins = edges.filter((e) => e.target === selectedId);
@@ -271,12 +272,12 @@ export default function ExploreMap() {
 
   // Canned title is instant; an AI title overlays it when available (keyed by first→last
   // so it re-fetches only when the journey's endpoints change). Falls back to canned.
-  const cannedTitle = titleFor(spineIds);
+  const cannedTitle = titleFor(spineIds, (id) => (resolve(id) ?? placeholder(id)).title);
   const titleKey = spineIds.length >= 2 ? `${spineIds[0]}>${spineIds[spineIds.length - 1]}` : "";
   useEffect(() => {
     if (!titleKey) return;
     let cancelled = false;
-    const titles = spineIds.map((id) => byId[id]?.title).filter(Boolean) as string[];
+    const titles = spineIds.map((id) => resolve(id)?.title).filter(Boolean) as string[];
     fetchTitle(titles)
       .then((t) => {
         if (!cancelled && t) setAiTitles((m) => ({ ...m, [titleKey]: t }));
@@ -447,7 +448,7 @@ export default function ExploreMap() {
       {/* spine breadcrumb */}
       <div className={styles.spineRail}>
         {spineIds.map((id, i) => {
-          const a = byId[id];
+          const a = resolve(id) ?? placeholder(id);
           const h = hueOf(a.category);
           return (
             <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
