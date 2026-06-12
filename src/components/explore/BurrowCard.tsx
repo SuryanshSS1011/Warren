@@ -83,6 +83,8 @@ export default function BurrowCard({
   return (
     <motion.div
       className={styles.burrow}
+      role="region"
+      aria-label={`${article.title} — reading panel`}
       style={{ "--cat-h": h, "--accent": accent } as React.CSSProperties}
       onPointerDown={(e) => e.stopPropagation()}
       {...motionProps}

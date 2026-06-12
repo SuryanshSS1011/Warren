@@ -401,7 +401,12 @@ export default function ExploreMap() {
       </header>
 
       {/* top-right controls */}
-      <div className={styles.controls} data-export-hide="true">
+      <div
+        className={styles.controls}
+        data-export-hide="true"
+        role="toolbar"
+        aria-label="Map controls"
+      >
         <button className={styles.ctl} onClick={() => apiRef.current?.fitToView()}>
           ⤢ Fit
         </button>
@@ -443,7 +448,7 @@ export default function ExploreMap() {
       </div>
 
       {/* spine breadcrumb */}
-      <div className={styles.spineRail}>
+      <nav className={styles.spineRail} aria-label="Your path (spine)">
         {spineIds.map((id, i) => {
           const a = resolve(id) ?? placeholder(id);
           const h = hueOf(a.category);
@@ -464,7 +469,7 @@ export default function ExploreMap() {
             </span>
           );
         })}
-      </div>
+      </nav>
 
       {/* stat strip */}
       <div className={styles.statStrip}>
