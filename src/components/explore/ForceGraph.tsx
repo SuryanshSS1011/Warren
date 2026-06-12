@@ -26,7 +26,24 @@ type NodeTileProps = {
   accent: string;
   registerPos: (el: HTMLDivElement | null) => void;
   onDown: (ev: ReactPointerEvent) => void;
+  onActivate: () => void;
 };
+
+// Shared a11y attributes that make a node tile a real, keyboard-operable button.
+function nodeA11y(node: GraphNode, isSel: boolean, onActivate: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    "aria-label": `${node.title}. ${node.category}.`,
+    "aria-pressed": isSel,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onActivate();
+      }
+    },
+  };
+}
 
 /* A single article tile. Plays its birth animation on mount, then strips the class so a
    frozen-timeline environment still lands on the visible base state. */
@@ -41,6 +58,7 @@ function NodeTile({
   accent,
   registerPos,
   onDown,
+  onActivate,
 }: NodeTileProps) {
   const innerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -61,6 +79,7 @@ function NodeTile({
           className={`${styles.nodeDot} ${onSpine ? styles.spine : styles.context}`}
           title={node.title}
           style={{ "--cat-h": hue, "--accent": accent } as React.CSSProperties}
+          {...nodeA11y(node, isSel, onActivate)}
         >
           <span className={styles.nodeDotMark} style={{ background: `oklch(0.72 0.15 ${hue})` }} />
           {labelOn ? <span className={styles.nodeDotLabel}>{node.title}</span> : null}
@@ -93,6 +112,7 @@ function NodeTile({
               : `oklch(0.7 0.06 ${hue} / 0.22)`,
           } as React.CSSProperties
         }
+        {...nodeA11y(node, isSel, onActivate)}
       >
         <div
           className={styles.thumb}
@@ -665,6 +685,10 @@ export default function ForceGraph(props: ForceGraphProps) {
                 else posRefs.current.delete(n.id);
               }}
               onDown={(ev) => onPointerDownNode(ev, n.id)}
+              onActivate={() => {
+                onSelect(n.id);
+                gotoFocus(n.id);
+              }}
             />
           );
         })}

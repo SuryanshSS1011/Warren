@@ -104,6 +104,11 @@
 .node:hover {
   transform: translateZ(0) scale(1.04);
 }
+.node:focus-visible,
+.nodeDot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .node.selected:hover {
   transform: scale(1.06);
 }
@@ -1047,5 +1052,23 @@
   }
   .subtitle {
     top: 162px;
+  }
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .born,
+  .subtitleAnim,
+  .burrowThumbImg {
+    animation: none !important;
+  }
+  .node,
+  .nodeDot,
+  .spinePill,
+  .chip,
+  .ctl,
+  .card,
+  .swatch {
+    transition: none !important;
   }
 }
