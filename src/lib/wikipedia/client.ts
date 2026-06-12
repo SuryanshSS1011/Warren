@@ -114,17 +114,18 @@ const NON_ARTICLE_PREFIX = /^(File|Image|Help|Category|Template|Wikipedia|Portal
 // Low-value "burrow deeper" targets: corporate entities, list/index pages, year/number
 // stubs, and language/format housekeeping that clutter the in-article link dump.
 const LOW_VALUE_TITLE =
-  /(\b(Inc|Ltd|LLC|GmbH|Co|Corporation|Company)\b\.?$)|(\bS\.p\.A\.?$)|(^List of )|(^Index of )|(\((company|disambiguation)\))|(^\d{3,4}$)|(^[A-Z]+ \d)|(English$)/i;
+  /(\b(Inc|Ltd|LLC|GmbH|Co|Corporation|Company)\b\.?$)|(\bS\.p\.A\.?$)|(^(List|Index|Outline|Timeline|History|Glossary) of )|(\((company|disambiguation)\))|(^\d{3,4}$)|(^[A-Z]+ \d)|(English$)/i;
 
-/** The next jumps a reader can burrow into, ranked by RELEVANCE (not alphabetically):
-      1. Wikipedia's curated "related" pages (best signal when present),
-      2. links that appear in the article's own summary extract (the lead-section links —
-         the most relevant on-ramps a reader actually meets first),
-      3. remaining in-article links.
+/** The next jumps a reader can burrow into, ranked by CONCEPTUAL RELEVANCE — what's
+    actually related to the topic, not what's merely popular or alphabetically first:
+      1. `morelike:` search — Wikipedia's own content-similarity ranking (the strong signal:
+         e.g. Black hole → Schwarzschild radius, Event horizon, Gravitational collapse),
+      2. in-article links the summary extract mentions (the lead-section on-ramps),
+      3. remaining in-article links, as a last-resort top-up.
     Main namespace only, house-keeping + low-value stubs filtered. */
 export async function getArticleLinks(title: string, limit = 40): Promise<BlueLink[]> {
   return cached(`wiki:links:${title}:${limit}`, LINKS_TTL, async () => {
-    const seen = new Set<string>();
+    const seen = new Set<string>([title]); // never link an article back to itself
     const out: BlueLink[] = [];
     const push = (titles: string[]) => {
       for (const t of titles) {
@@ -135,89 +136,71 @@ export async function getArticleLinks(title: string, limit = 40): Promise<BlueLi
       }
     };
 
-    // Fetch curated related pages, the summary (for extract-ranking), and in-article links
-    // together. Each is independently cached + concurrency-limited.
-    const [related, summary, inTextRaw] = await Promise.all([
-      getRelated(title),
+    const [similar, summary, inTextRaw] = await Promise.all([
+      getSimilarArticles(title, limit),
       getPageSummary(title).catch(() => null),
-      (async () => {
-        const params = new URLSearchParams({
-          action: "query",
-          format: "json",
-          prop: "links",
-          titles: title,
-          plnamespace: "0",
-          pllimit: String(Math.min(limit * 6, 500)),
-          redirects: "1",
-          origin: "*",
-        });
-        const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
-        if (!res.ok) {
-          discard(res);
-          return [] as string[];
-        }
-        const data = (await res.json()) as {
-          query?: { pages?: Record<string, { links?: { title: string }[] }> };
-        };
-        const pages = data.query?.pages ?? {};
-        return Object.values(pages).flatMap((p) => (p.links ?? []).map((l) => l.title));
-      })(),
+      getInArticleLinks(title, limit),
     ]);
 
-    // 1) curated related
-    push(related.pages.map((p) => p.title));
+    // 1) content-similarity (the primary relevance signal)
+    push(similar);
 
-    // 2) in-text links that the extract actually mentions (lead-section = most relevant)
+    // 2) lead-section links the extract mentions
     const extract = (summary?.extract ?? "").toLowerCase();
-    if (extract) {
+    if (extract && out.length < limit) {
       push(inTextRaw.filter((t) => extract.includes(t.toLowerCase())));
     }
 
-    // 3) the rest, ranked by pageview popularity (prominent articles >> obscure stubs),
-    //    which replaces the API's useless alphabetical order with a real relevance signal.
-    if (out.length < limit) {
-      const remaining = inTextRaw.filter(
-        (t) => !seen.has(t) && !NON_ARTICLE_PREFIX.test(t) && !LOW_VALUE_TITLE.test(t),
-      );
-      const ranked = await rankByPageviews(Array.from(new Set(remaining)));
-      push(ranked);
-    }
+    // 3) remaining in-article links (only if still short)
+    if (out.length < limit) push(inTextRaw);
 
     return out;
   });
 }
 
-/** Order candidate titles by recent pageview volume (descending). Popular articles are a
-    strong proxy for relevance/prominence; obscure stubs sink. Batches to respect API
-    limits and falls back to the input order if the request fails. */
-async function rankByPageviews(titles: string[]): Promise<string[]> {
-  if (titles.length <= 1) return titles;
-  // The pageviews prop accepts up to 50 titles per query; cap the candidate pool.
-  const pool = titles.slice(0, 150);
-  const views = new Map<string, number>();
-  for (let i = 0; i < pool.length; i += 50) {
-    const batch = pool.slice(i, i + 50);
-    const params = new URLSearchParams({
-      action: "query",
-      format: "json",
-      prop: "pageviews",
-      titles: batch.join("|"),
-      pvipdays: "30",
-      redirects: "1",
-      origin: "*",
-    });
-    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
-    if (!res.ok) {
-      discard(res);
-      continue;
-    }
-    const data = (await res.json()) as {
-      query?: { pages?: Record<string, { title: string; pageviews?: Record<string, number | null> }> };
-    };
-    for (const p of Object.values(data.query?.pages ?? {})) {
-      const total = Object.values(p.pageviews ?? {}).reduce<number>((s, v) => s + (v ?? 0), 0);
-      views.set(p.title, total);
-    }
+/** Wikipedia "morelike" search — content-similar articles, the best relatedness signal. */
+async function getSimilarArticles(title: string, limit: number): Promise<string[]> {
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    list: "search",
+    srsearch: `morelike:${title}`,
+    srnamespace: "0",
+    srlimit: String(Math.min(limit + 6, 50)),
+    srqiprofile: "classic_noboostlinks",
+    origin: "*",
+  });
+  const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
+  if (!res.ok) {
+    discard(res);
+    return [];
   }
-  return [...pool].sort((a, b) => (views.get(b) ?? 0) - (views.get(a) ?? 0));
+  const data = (await res.json()) as {
+    query?: { search?: { title: string }[] };
+  };
+  return (data.query?.search ?? []).map((s) => s.title);
+}
+
+/** The article's in-text links (main namespace), in API order. */
+async function getInArticleLinks(title: string, limit: number): Promise<string[]> {
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    prop: "links",
+    titles: title,
+    plnamespace: "0",
+    pllimit: String(Math.min(limit * 6, 500)),
+    redirects: "1",
+    origin: "*",
+  });
+  const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
+  if (!res.ok) {
+    discard(res);
+    return [];
+  }
+  const data = (await res.json()) as {
+    query?: { pages?: Record<string, { links?: { title: string }[] }> };
+  };
+  const pages = data.query?.pages ?? {};
+  return Object.values(pages).flatMap((p) => (p.links ?? []).map((l) => l.title));
 }
