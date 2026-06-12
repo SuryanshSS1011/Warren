@@ -325,8 +325,9 @@ export default function ForceGraph(props: ForceGraphProps) {
     c.tzoom = opts?.zoom || Math.min(1.15, Math.max(c.zoom, 0.95));
     const rr = propsRef.current.reserveRight || 0;
     const rb = propsRef.current.reserveBottom || 0;
+    const rt = propsRef.current.reserveTop || 0;
     c.tx = (w - rr) / 2 - p.x * c.tzoom;
-    c.ty = (h - rb) / 2 - p.y * c.tzoom;
+    c.ty = rt + (h - rt - rb) / 2 - p.y * c.tzoom;
   }
 
   function fitToView() {
@@ -347,8 +348,9 @@ export default function ForceGraph(props: ForceGraphProps) {
     const h = vp ? vp.clientHeight : 800;
     const rr = propsRef.current.reserveRight || 0;
     const rb = propsRef.current.reserveBottom || 0;
+    const rt = propsRef.current.reserveTop || 0;
     const availW = w - rr;
-    const availH = h - rb;
+    const availH = h - rt - rb;
     const pad = 220;
     const bw = maxX - minX + pad;
     const bh = maxY - minY + pad;
@@ -356,7 +358,7 @@ export default function ForceGraph(props: ForceGraphProps) {
     const c = cam.current;
     c.tzoom = z;
     c.tx = availW / 2 - ((minX + maxX) / 2) * z;
-    c.ty = availH / 2 - ((minY + maxY) / 2) * z;
+    c.ty = rt + availH / 2 - ((minY + maxY) / 2) * z;
   }
 
   // ---- render frame ----
