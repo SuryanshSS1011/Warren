@@ -111,17 +111,41 @@ export type BlueLink = { title: string };
 // Namespaces that are not real articles (File:, Help:, Category:, etc.).
 const NON_ARTICLE_PREFIX = /^(File|Image|Help|Category|Template|Wikipedia|Portal|Special|Talk|User|Module|Draft|MediaWiki):/i;
 
-/** The clickable in-article "blue links" — the next jumps a reader can burrow into.
-    Uses the Action API `links` generator (main namespace only) and filters house-keeping. */
+// Low-value "burrow deeper" targets: corporate entities, list/index pages, year/number
+// stubs, and language/format housekeeping that clutter the in-article link dump.
+const LOW_VALUE_TITLE =
+  /(\b(Inc|Ltd|LLC|GmbH|Co|Corporation|Company)\b\.?$)|(\bS\.p\.A\.?$)|(^List of )|(^Index of )|(\((company|disambiguation)\))|(^\d{3,4}$)|(^[A-Z]+ \d)|(English$)/i;
+
+/** The next jumps a reader can burrow into. Prefers Wikipedia's curated "related" pages
+    (genuinely relevant, not alphabetical noise), falling back to in-article links when
+    related is empty. Main namespace only, house-keeping filtered. */
 export async function getArticleLinks(title: string, limit = 40): Promise<BlueLink[]> {
   return cached(`wiki:links:${title}:${limit}`, LINKS_TTL, async () => {
+    const dedupe = (titles: string[]): BlueLink[] => {
+      const seen = new Set<string>();
+      const out: BlueLink[] = [];
+      for (const t of titles) {
+        if (!t || NON_ARTICLE_PREFIX.test(t) || LOW_VALUE_TITLE.test(t) || seen.has(t)) continue;
+        seen.add(t);
+        out.push({ title: t });
+        if (out.length >= limit) break;
+      }
+      return out;
+    };
+
+    // 1) Curated related pages (high quality).
+    const related = await getRelated(title);
+    const relatedLinks = dedupe(related.pages.map((p) => p.title));
+    if (relatedLinks.length >= Math.min(6, limit)) return relatedLinks;
+
+    // 2) Fall back to (or top up with) the article's in-text links.
     const params = new URLSearchParams({
       action: "query",
       format: "json",
       prop: "links",
       titles: title,
-      plnamespace: "0", // main article namespace only
-      pllimit: String(Math.min(limit, 500)),
+      plnamespace: "0",
+      pllimit: String(Math.min(limit * 4, 500)),
       redirects: "1",
       origin: "*",
     });
@@ -130,22 +154,13 @@ export async function getArticleLinks(title: string, limit = 40): Promise<BlueLi
     });
     if (!res.ok) {
       discard(res);
-      return [];
+      return relatedLinks;
     }
     const data = (await res.json()) as {
       query?: { pages?: Record<string, { links?: { title: string }[] }> };
     };
     const pages = data.query?.pages ?? {};
-    const links = Object.values(pages).flatMap((p) => p.links ?? []);
-    const seen = new Set<string>();
-    const out: BlueLink[] = [];
-    for (const l of links) {
-      if (NON_ARTICLE_PREFIX.test(l.title)) continue;
-      if (seen.has(l.title)) continue;
-      seen.add(l.title);
-      out.push({ title: l.title });
-      if (out.length >= limit) break;
-    }
-    return out;
+    const inText = Object.values(pages).flatMap((p) => (p.links ?? []).map((l) => l.title));
+    return dedupe([...relatedLinks.map((l) => l.title), ...inText]);
   });
 }

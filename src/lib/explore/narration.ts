@@ -113,15 +113,20 @@ const TITLES: Record<string, string> = {
   "black-hole>moon": "Pulled In by Gravity, All the Way Home",
 };
 
-export function titleFor(spineIds: string[]): string {
+/** `titleOf` resolves an id (corpus slug OR live: id) to its display title; defaults to
+    the corpus lookup so existing callers/tests keep working. */
+export function titleFor(
+  spineIds: string[],
+  titleOf: (id: string) => string = (id) => byId[id]?.title ?? id,
+): string {
   if (!spineIds || spineIds.length < 2) {
-    return spineIds && spineIds[0] ? byId[spineIds[0]].title : "Untitled warren";
+    return spineIds && spineIds[0] ? titleOf(spineIds[0]) : "Untitled warren";
   }
   const first = spineIds[0];
   const last = spineIds[spineIds.length - 1];
   const key = `${first}>${last}`;
   if (TITLES[key]) return TITLES[key];
-  return `The ${byId[first].title} to ${byId[last].title} Run`;
+  return `The ${titleOf(first)} to ${titleOf(last)} Run`;
 }
 
 export type Badge = { name: string; glyph: string };

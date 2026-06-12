@@ -1,26 +1,53 @@
 "use client";
 
+import { useEffect } from "react";
 import useSWR from "swr";
-import { jsonFetcher, summaryKey, type LiveSummary } from "@/lib/explore/api";
+import {
+  jsonFetcher,
+  linksKey,
+  summaryKey,
+  type LiveLinks,
+  type LiveSummary,
+} from "@/lib/explore/api";
+import { liveIdFor, upsertLive } from "@/lib/explore/article-store";
 
-/** Background-enrich a corpus article with its live Wikipedia summary (real thumbnail +
-    canonical extract). Returns null while loading or if the proxy/title is unavailable,
-    so callers can fall back to the offline corpus without any flash of empty content. */
+/** Background-enrich an article with its live Wikipedia summary (real thumbnail +
+    canonical extract) AND its in-article blue links. Writes the result into the shared
+    article store (keyed by a live: id) so chips can spawn real Wikipedia nodes. Returns
+    null while loading or if the proxy/title is unavailable so callers fall back to the
+    offline corpus without a flash of empty content. */
 export function useLiveArticle(title: string | null) {
-  const { data, error, isLoading } = useSWR<LiveSummary>(
-    summaryKey(title),
-    jsonFetcher,
-    {
-      revalidateOnFocus: false,
-      shouldRetryOnError: false,
-      dedupingInterval: 1000 * 60 * 10,
-    },
-  );
-  // A disambiguation response carries no usable extract/thumbnail — treat it as "no live
-  // data" so the burrow card falls back to the offline corpus instead of rendering empty.
+  const summary = useSWR<LiveSummary>(summaryKey(title), jsonFetcher, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+    dedupingInterval: 1000 * 60 * 10,
+  });
+  const links = useSWR<LiveLinks>(linksKey(title, 14), jsonFetcher, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+    dedupingInterval: 1000 * 60 * 10,
+  });
+
+  // A disambiguation response carries no usable extract — treat it as "no live data".
+  const data = summary.data;
   const usable = data && data.type !== "disambiguation" ? data : null;
+  const liveLinks = links.data?.links ?? null;
+
+  // Mirror live data into the shared store so the graph can resolve live: nodes.
+  useEffect(() => {
+    if (!usable && !liveLinks) return;
+    upsertLive({
+      title: title!,
+      extract: usable?.extract,
+      description: usable?.description,
+      thumbnail: usable?.thumbnail?.source,
+      links: liveLinks ? liveLinks.map((l) => liveIdFor(l.title)) : undefined,
+    });
+  }, [title, usable, liveLinks]);
+
   return {
-    live: error ? null : usable,
-    isLoading,
+    live: summary.error ? null : usable,
+    liveLinks: links.error ? null : liveLinks,
+    isLoading: summary.isLoading,
   };
 }
