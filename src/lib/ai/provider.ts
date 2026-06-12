@@ -1,5 +1,5 @@
 import "server-only";
-import { getServerEnv } from "@/lib/env/server";
+import { getAiEnv } from "@/lib/env/server";
 import { getAnthropic, getModel as getAnthropicModel } from "./anthropic";
 import { getGemini, getGeminiModel } from "./gemini";
 
@@ -10,7 +10,8 @@ export type GenerateArgs = {
 };
 
 export async function generateText({ system, user, maxTokens = 200 }: GenerateArgs) {
-  const { AI_PROVIDER } = getServerEnv();
+  // Validates the selected provider's key here (lazily) — keeps non-AI paths AI-free.
+  const { AI_PROVIDER } = getAiEnv();
 
   if (AI_PROVIDER === "anthropic") {
     const res = await getAnthropic().messages.create({
