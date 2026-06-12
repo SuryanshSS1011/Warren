@@ -429,14 +429,11 @@ export default function ExploreMap() {
         {ACCENT_SWATCHES.map((c) => (
           <button
             key={c}
-            className={styles.ctl}
+            className={styles.swatch}
             aria-label={`Accent ${c}`}
+            aria-pressed={accent === c}
             onClick={() => setAccent(c)}
             style={{
-              width: 22,
-              height: 22,
-              padding: 0,
-              borderRadius: 8,
               background: c,
               borderColor: accent === c ? "var(--ink)" : "var(--line)",
             }}

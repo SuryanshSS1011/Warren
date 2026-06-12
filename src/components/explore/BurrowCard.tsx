@@ -87,7 +87,15 @@ export default function BurrowCard({
       onPointerDown={(e) => e.stopPropagation()}
       {...motionProps}
       transition={{ duration: 0.42, ease: [0.2, 0.85, 0.25, 1] }}
+      // mobile bottom-sheet: swipe down to dismiss
+      drag={isMobile ? "y" : false}
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={{ top: 0, bottom: 0.6 }}
+      onDragEnd={(_e, info) => {
+        if (isMobile && (info.offset.y > 120 || info.velocity.y > 600)) onClose();
+      }}
     >
+      {isMobile ? <div className={styles.burrowGrabber} aria-hidden /> : null}
       <button className={styles.burrowClose} onClick={onClose} aria-label="Close">
         ×
       </button>
