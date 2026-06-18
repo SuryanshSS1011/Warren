@@ -37,7 +37,7 @@ export default function WarrenList({
   const branches = presentIds.filter((id) => !spineSet.has(id));
 
   const renderItem = (id: string, index: number | null, onSpine: boolean) => {
-    const a = byId[id];
+    const a = byId[id] || { title: id, category: "Physics" };
     const h = hueOf(a.category);
     const bridge = index === 0 ? null : bridgeInto(id);
     return (

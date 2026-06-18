@@ -8,6 +8,7 @@ export const SnapshotNode = z.object({
   title: z.string().min(1),
   category: z.string().min(1),
   depth: z.number().int().min(0),
+  researchNotes: z.array(z.string()).optional(),
 });
 
 export const SnapshotEdge = z.object({

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./gallery.module.css";
-import MiniTrail from "@/components/explore/MiniTrail";
-import { listPublicWarrens, type WarrenCard } from "@/lib/explore/repository";
+import { listPublicWarrens } from "@/lib/explore/repository";
+import GallerySearch from "./GallerySearch";
 
 export const metadata: Metadata = {
   title: "Gallery — Warren",
@@ -12,49 +12,15 @@ export const metadata: Metadata = {
 // Always fetch fresh public warrens.
 export const dynamic = "force-dynamic";
 
-function Stars({ n }: { n: number }) {
-  return (
-    <span className={styles.cardStars} aria-label={`${n} of 5`}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <span key={i} className={i < n ? "" : styles.cardStarOff}>
-          ★
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function Card({ w }: { w: WarrenCard }) {
-  return (
-    <Link href={`/w/${w.id}`} className={styles.card}>
-      <div className={styles.cardThumb}>
-        <MiniTrail trail={w.trail} />
-      </div>
-      <div className={styles.cardBody}>
-        <div className={styles.cardTitle}>{w.title}</div>
-        <div className={styles.cardStats}>
-          <span>
-            <b>{w.stats.hops}</b> hops
-          </span>
-          <span className={styles.cardSep}>·</span>
-          <span>
-            <b>{w.stats.categories}</b> cats
-          </span>
-          <span className={styles.cardSep}>·</span>
-          <span>
-            <b>{w.stats.minutes}</b> min
-          </span>
-          <Stars n={w.stats.stars} />
-        </div>
-      </div>
-    </Link>
-  );
-}
+import { ARTICLES } from "@/lib/explore/corpus";
 
 export default async function GalleryPage() {
   const warrens = await listPublicWarrens(24);
   const featured = warrens.slice(0, 3);
   const trending = warrens.slice(3);
+
+  // Start with a random interesting article from the corpus if they click "Start your own".
+  const randomStart = ARTICLES[Math.floor(Math.random() * ARTICLES.length)].title;
 
   return (
     <div className={styles.root}>
@@ -74,7 +40,7 @@ export default async function GalleryPage() {
             <div className={styles.brandTag}>Gallery</div>
           </div>
         </Link>
-        <Link href="/" className={styles.cta}>
+        <Link href={`/?start=${encodeURIComponent(randomStart)}`} className={styles.cta}>
           Start your own →
         </Link>
       </header>
@@ -89,7 +55,9 @@ export default async function GalleryPage() {
         </p>
       </section>
 
-      {warrens.length === 0 ? (
+      <GallerySearch featured={featured} trending={trending} />
+
+      {warrens.length === 0 && (
         <div className={styles.empty}>
           <div className={styles.emptyCard}>
             <h3>No public warrens yet</h3>
@@ -103,34 +71,6 @@ export default async function GalleryPage() {
             </p>
           </div>
         </div>
-      ) : (
-        <>
-          <section className={styles.section}>
-            <div className={styles.sectionHead}>
-              <h2 className={styles.sectionTitle}>Featured</h2>
-              <span className={styles.sectionNote}>today&rsquo;s pick</span>
-            </div>
-            <div className={styles.grid}>
-              {featured.map((w) => (
-                <Card key={w.id} w={w} />
-              ))}
-            </div>
-          </section>
-
-          {trending.length > 0 ? (
-            <section className={styles.section}>
-              <div className={styles.sectionHead}>
-                <h2 className={styles.sectionTitle}>Trending</h2>
-                <span className={styles.sectionNote}>recently mapped</span>
-              </div>
-              <div className={styles.grid}>
-                {trending.map((w) => (
-                  <Card key={w.id} w={w} />
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </>
       )}
     </div>
   );

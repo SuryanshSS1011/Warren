@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Warren Live: Wikipedia Rabbit Hole",
+  "version": "1.0",
+  "description": "Automatically maps your Wikipedia journey in Warren as you browse.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://*.wikipedia.org/*", "http://localhost:3000/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://*.wikipedia.org/wiki/*"],
+      "js": ["content.js"],
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

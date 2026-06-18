@@ -1,24 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import styles from "@/app/explore.module.css";
-import { byId, hueOf, START_ID, type CategoryName } from "@/lib/explore/corpus";
+import { ARTICLES, byId, byTitle, hueOf, START_ID, type CategoryName } from "@/lib/explore/corpus";
 import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
 import BurrowCard from "./BurrowCard";
-import ForceGraph from "./ForceGraph";
+import CanvasGraphEngine from "./CanvasGraphEngine";
 import Starfield from "./Starfield";
 import WarrenList from "./WarrenList";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
+import { addNodeNote } from "./graphUtils";
 
 const DEFAULT_ACCENT = "#e9b44c"; // antique gold (Star Chart spine)
 const ACCENT_SWATCHES = ["#e9b44c", "#8aa0ff", "#b58cff", "#5fd9c2", "#ff8fab"];
 const STARFIELD = 0.9;
 const MOBILE_BP = 880;
+const STORAGE_KEY = "warren_current_state_v2";
 
 type Present = { id: string; depth: number };
 
@@ -55,16 +58,19 @@ function Subtitle({ text }: { text: string }) {
 }
 
 export default function ExploreMap() {
+  const searchParams = useSearchParams();
+  const startParam = searchParams.get("start");
+
   // ---- tweakable display state ----
   const [accent, setAccent] = useState(DEFAULT_ACCENT);
   const [showAllLabels, setShowAllLabels] = useState(false);
 
   // ---- graph state ----
-  const [present, setPresent] = useState<Present[]>([{ id: START_ID, depth: 0 }]);
+  const [present, setPresent] = useState<Present[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
-  const [spineIds, setSpineIds] = useState<string[]>([START_ID]);
+  const [spineIds, setSpineIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [newestId, setNewestId] = useState<string | null>(START_ID);
+  const [newestId, setNewestId] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState<{ text: string; key: number } | null>(null);
   const [elapsed, setElapsed] = useState(4);
   const [viewportW, setViewportW] = useState<number>(MOBILE_BP + 1);
@@ -73,6 +79,67 @@ export default function ExploreMap() {
   const [announce, setAnnounce] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<"burrow" | "wikipedia">("burrow");
+  const [enrichedData, setEnrichedData] = useState<Record<string, { title: string; category: CategoryName }>>({});
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  // ---- Persistence & Initialization ----
+
+  // 1. Hydrate from localStorage once on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved && !startParam) {
+        const data = JSON.parse(saved);
+        if (data.present) setPresent(data.present);
+        if (data.edges) setEdges(data.edges);
+        if (data.spineIds) setSpineIds(data.spineIds);
+        if (data.enrichedData) setEnrichedData(data.enrichedData);
+      }
+    } catch (e) {
+      console.error("Failed to load warren state", e);
+    }
+    setHasHydrated(true);
+  }, [startParam]);
+
+  // 2. Initialize fresh if nothing was hydrated or if startParam is provided
+  useEffect(() => {
+    if (!hasHydrated) return;
+
+    const initialId = (() => {
+      if (!startParam) return START_ID;
+      const found = ARTICLES.find((a) => a.title.toLowerCase() === startParam.toLowerCase());
+      return found ? found.id : startParam;
+    })();
+
+    // Initialize only if empty OR if we're forced to a new start that isn't in our current map
+    if (present.length === 0 || (startParam && !present.find(p => p.id === initialId))) {
+      if (startParam && !present.find(p => p.id === initialId)) {
+        setPresent([{ id: initialId, depth: 0 }]);
+        setSpineIds([initialId]);
+        setEdges([]);
+        setSelectedId(initialId);
+        setNewestId(initialId);
+      } else if (present.length === 0) {
+        setPresent([{ id: initialId, depth: 0 }]);
+        setSpineIds([initialId]);
+        setSelectedId(null);
+        setNewestId(initialId);
+      }
+    }
+  }, [startParam, hasHydrated]); 
+
+  // 3. Save to localStorage on change
+  useEffect(() => {
+    if (hasHydrated && present.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        present,
+        edges,
+        spineIds,
+        enrichedData
+      }));
+    }
+  }, [present, edges, spineIds, enrichedData, hasHydrated]);
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
   const [startedAt] = useState(() => Date.now() - 4 * 60 * 1000);
@@ -81,12 +148,24 @@ export default function ExploreMap() {
   const introDone = useRef(false);
   const subTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const presentIds = new Set(present.map((p) => p.id));
+  // ---- utility functions ----
 
-  const nodes: GraphNode[] = present.map((p) => {
-    const a = byId[p.id];
-    return { id: p.id, depth: p.depth, category: a.category as CategoryName, title: a.title };
-  });
+  const resolveId = useCallback((idOrTitle: string) => {
+    const corpusId = byTitle[idOrTitle]?.id;
+    if (corpusId) return corpusId;
+    
+    // Check if any enriched node has this as its canonical title
+    const enrichedId = Object.entries(enrichedData).find(
+      ([id, data]) => data.title === idOrTitle
+    )?.[0];
+    
+    return enrichedId || idOrTitle;
+  }, [enrichedData]);
+
+  const flashToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3200);
+  }, []);
 
   const flashSubtitle = useCallback((text: string) => {
     setSubtitle({ text, key: Date.now() });
@@ -94,139 +173,77 @@ export default function ExploreMap() {
     subTimer.current = setTimeout(() => setSubtitle(null), 7000);
   }, []);
 
-  // ---- add a hop ----
-  const addHop = useCallback(
-    (fromId: string, toId: string, asSpine: boolean) => {
-      setPresent((prev) => {
-        if (prev.find((p) => p.id === toId)) return prev;
-        const fromDepth = (prev.find((p) => p.id === fromId) || { depth: 0 }).depth;
-        return [...prev, { id: toId, depth: fromDepth + 1 }];
-      });
-      setEdges((prev) => {
-        if (prev.find((e) => e.source === fromId && e.target === toId)) return prev;
-        return [...prev, { source: fromId, target: toId, spine: asSpine, bridge: bridgeFor(fromId, toId) }];
-      });
-      if (asSpine)
-        setSpineIds((prev) => (prev[prev.length - 1] === fromId ? [...prev, toId] : prev));
-      setNewestId(toId);
-      setSelectedId(toId);
-      const bridge = bridgeFor(fromId, toId);
-      flashSubtitle(bridge);
-      // ARIA live announcement for screen readers (a11y plan: announce each new node).
-      setAnnounce(`Added ${byId[toId].title}. ${bridge}`);
-    },
-    [flashSubtitle],
-  );
+  // ---- derived state (no handlers) ----
 
-  // ---- chip click ----
-  const handleChip = useCallback(
-    (fromId: string, toId: string, visited: boolean) => {
-      if (visited) {
-        setEdges((prev) =>
-          prev.find((e) => e.source === fromId && e.target === toId)
-            ? prev
-            : [...prev, { source: fromId, target: toId, spine: false, bridge: bridgeFor(fromId, toId) }],
-        );
-        setSelectedId(toId);
-        setNewestId(null);
-        return;
-      }
-      const isSpine = spineIds[spineIds.length - 1] === fromId;
-      addHop(fromId, toId, isSpine);
-    },
-    [spineIds, addHop],
-  );
+  const presentIds = new Set(present.map((p) => p.id));
 
-  const handleSelect = useCallback((id: string) => {
-    setSelectedId(id);
-    setNewestId(null);
-  }, []);
-
-  const handleReady = useCallback((api: GraphApi) => {
-    apiRef.current = api;
-  }, []);
-
-  // Palette pick: select if already present, else attach as a branch off the current node.
-  const jumpTo = useCallback(
-    (id: string) => {
-      if (presentIds.has(id)) {
-        handleSelect(id);
-        apiRef.current?.focus(id);
-        return;
-      }
-      const fromId = selectedId ?? spineIds[spineIds.length - 1];
-      const isSpine = spineIds[spineIds.length - 1] === fromId;
-      addHop(fromId, id, isSpine);
-    },
-    // presentIds is recomputed each render; spread its membership via present length
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedId, spineIds, addHop, handleSelect, present.length],
-  );
-
-  // ⌘K / Ctrl+K opens the article palette.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((v) => !v);
-      }
+  const nodes: GraphNode[] = present.map((p) => {
+    const enriched = enrichedData[p.id];
+    const a = byId[p.id] || { 
+      id: p.id, 
+      title: enriched?.title || p.id, 
+      category: enriched?.category || ("Physics" as CategoryName),
+      blurb: "Live Wikipedia article",
+      extract: "Loading from Wikipedia...",
+      links: []
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // track viewport width for burrow placement (avoids window access during render)
-  useEffect(() => {
-    const onResize = () => setViewportW(window.innerWidth);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  // ---- intro autoplay: black-hole → spaghettification → pasta ----
-  useEffect(() => {
-    const seq: [string, string][] = [
-      ["black-hole", "spaghettification"],
-      ["spaghettification", "pasta"],
-    ];
-    let i = 0;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const step = () => {
-      if (introDone.current) return;
-      if (i >= seq.length) {
-        setSelectedId("pasta");
-        introDone.current = true;
-        return;
-      }
-      const [from, to] = seq[i++];
-      addHop(from, to, true);
-      timers.push(setTimeout(step, 1500));
+    return { 
+      id: p.id, 
+      depth: p.depth, 
+      category: a.category as CategoryName, 
+      title: a.title,
+      researchNotes: (enriched as any)?.researchNotes || []
     };
-    timers.push(setTimeout(step, 900));
-    return () => timers.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const skipIntro = () => {
-    introDone.current = true;
-  };
-
-  // elapsed timer
-  useEffect(() => {
-    const iv = setInterval(
-      () => setElapsed(Math.round((Date.now() - startedAt) / 60000)),
-      15000,
-    );
-    return () => clearInterval(iv);
-  }, [startedAt]);
-
-  // apply accent + starfield to root CSS vars
-  useEffect(() => {
-    document.documentElement.style.setProperty("--accent", accent);
-  }, [accent]);
+  });
 
   // ---- derived ----
-  const selArticle = selectedId ? byId[selectedId] : null;
+
+  const selArticle = useMemo(() => {
+    if (!selectedId) return null;
+
+    const base = byId[selectedId] || {
+      id: selectedId,
+      title: enrichedData[selectedId]?.title || selectedId,
+      category: enrichedData[selectedId]?.category || ("Physics" as CategoryName),
+      blurb: "Live Wikipedia article",
+      extract: "Loading from Wikipedia...",
+      links: []
+    };
+
+    return {
+      ...base,
+      researchNotes: (enrichedData[selectedId] as any)?.researchNotes || []
+    };
+  }, [selectedId, enrichedData]);
+
+  const selectedPathTitles = useMemo(() => {
+    if (!selectedId) return [];
+    
+    // Find the path from the root to the selected node.
+    // In our graph, the spine represents the main path. 
+    // If the node is on the spine, we use the spine up to that point.
+    // If the node is a leaf connected to a spine node, we use the spine up to that connection + the node.
+    
+    const spineIndex = spineIds.indexOf(selectedId);
+    if (spineIndex !== -1) {
+      const pathIds = spineIds.slice(0, spineIndex + 1);
+      return pathIds.map(id => enrichedData[id]?.title || byId[id]?.title || id);
+    }
+
+    // Node is not on spine. Find if it's connected to any spine node.
+    const parentEdge = edges.find(e => e.target === selectedId);
+    if (parentEdge) {
+      const parentSpineIndex = spineIds.indexOf(parentEdge.source);
+      if (parentSpineIndex !== -1) {
+        const pathIds = [...spineIds.slice(0, parentSpineIndex + 1), selectedId];
+        return pathIds.map(id => enrichedData[id]?.title || byId[id]?.title || id);
+      }
+    }
+
+    // Fallback: just use the spine + this node if they aren't connected (shouldn't happen in normal flow)
+    return [...spineIds, selectedId].map(id => enrichedData[id]?.title || byId[id]?.title || id);
+  }, [selectedId, spineIds, enrichedData, edges]);
+
   const incomingBridge = (() => {
     if (!selectedId) return null;
     const ins = edges.filter((e) => e.target === selectedId);
@@ -248,17 +265,131 @@ export default function ExploreMap() {
       ? Math.round((typeof window !== "undefined" ? window.innerHeight : 700) * 0.52)
       : 0;
 
+  // ---- handlers (can use utilities and derived state) ----
+
+  const spawnNode = useCallback((rawId: string) => {
+    const id = resolveId(rawId);
+    setPresent((prev) => {
+      if (prev.find((p) => p.id === id)) return prev;
+      return [...prev, { id, depth: 0 }];
+    });
+    setSelectedId(id);
+    setNewestId(id);
+  }, [resolveId]);
+
+  const addHop = useCallback(
+    (rawFrom: string, rawTo: string, asSpine: boolean) => {
+      const fromId = resolveId(rawFrom);
+      const toId = resolveId(rawTo);
+
+      setPresent((prev) => {
+        let next = prev;
+        // If the starting node isn't in the map yet, add it as a new root
+        if (!prev.find((p) => p.id === fromId)) {
+          next = [...next, { id: fromId, depth: 0 }];
+        }
+        // Add the target node if missing
+        if (!next.find((p) => p.id === toId)) {
+          const fromDepth = (next.find((p) => p.id === fromId) || { depth: 0 }).depth;
+          next = [...next, { id: toId, depth: fromDepth + 1 }];
+        }
+        return next;
+      });
+      setEdges((prev) => {
+        if (prev.find((e) => e.source === fromId && e.target === toId)) return prev;
+        return [...prev, { source: fromId, target: toId, spine: asSpine, bridge: bridgeFor(fromId, toId) }];
+      });
+      if (asSpine)
+        setSpineIds((prev) => (prev[prev.length - 1] === fromId ? [...prev, toId] : prev));
+      setNewestId(toId);
+      setSelectedId(toId);
+      const bridge = bridgeFor(fromId, toId);
+      flashSubtitle(bridge);
+      // ARIA live announcement for screen readers (a11y plan: announce each new node).
+      const title = enrichedData[toId]?.title || byId[toId]?.title || toId;
+      setAnnounce(`Added ${title}. ${bridge}`);
+    },
+    [flashSubtitle, enrichedData, resolveId],
+  );
+
+  const handleChip = useCallback(
+    (rawFrom: string, rawTo: string, visited: boolean) => {
+      const fromId = resolveId(rawFrom);
+      const toId = resolveId(rawTo);
+
+      if (visited) {
+        setEdges((prev) =>
+          prev.find((e) => e.source === fromId && e.target === toId)
+            ? prev
+            : [...prev, { source: fromId, target: toId, spine: false, bridge: bridgeFor(fromId, toId) }],
+        );
+        setSelectedId(toId);
+        setNewestId(null);
+        return;
+      }
+      const isSpine = spineIds[spineIds.length - 1] === fromId;
+      addHop(fromId, toId, isSpine);
+    },
+    [spineIds, addHop, resolveId],
+  );
+
+  const handleSelect = useCallback((rawId: string) => {
+    const id = resolveId(rawId);
+    setSelectedId(id);
+    setNewestId(null);
+  }, [resolveId]);
+
+  const handleReady = useCallback((api: GraphApi) => {
+    apiRef.current = api;
+  }, []);
+
+  const jumpTo = useCallback(
+    (rawId: string) => {
+      const id = resolveId(rawId);
+      if (presentIds.has(id)) {
+        handleSelect(id);
+        apiRef.current?.focus(id);
+        return;
+      }
+      const fromId = selectedId ?? spineIds[spineIds.length - 1];
+      const isSpine = spineIds[spineIds.length - 1] === fromId;
+      addHop(fromId, id, isSpine);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedId, spineIds, addHop, handleSelect, present.length, resolveId],
+  );
+
+  const handleEnrich = useCallback((id: string, data: { title: string; category: CategoryName }) => {
+    setEnrichedData((prev) => {
+      if (prev[id]?.title === data.title && prev[id]?.category === data.category) return prev;
+      return { ...prev, [id]: data };
+    });
+  }, []);
+
+  const handleHighlight = useCallback((nodeId: string, text: string) => {
+    setEnrichedData((prev) => {
+      const data = prev[nodeId] || { title: nodeId, category: "Physics" };
+      const notes = (data as any).researchNotes || [];
+      if (notes.includes(text)) return prev;
+      
+      flashToast("Highlight saved to star ✦");
+      
+      return {
+        ...prev,
+        [nodeId]: {
+          ...data,
+          researchNotes: [...notes, text]
+        }
+      };
+    });
+  }, [flashToast]);
+
   const handleExport = useCallback(() => {
     if (rootRef.current) {
       const slug = autoTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       void exportWarrenImage(rootRef.current, `${slug || "warren"}.png`);
     }
   }, [autoTitle]);
-
-  const flashToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3200);
-  }, []);
 
   const handleShare = useCallback(async () => {
     if (saving) return;
@@ -271,6 +402,7 @@ export default function ExploreMap() {
         title: n.title,
         category: n.category,
         depth: n.depth,
+        researchNotes: n.researchNotes,
       })),
       edges,
       startedAt,
@@ -305,11 +437,93 @@ export default function ExploreMap() {
     }
   }, [saving, autoTitle, spineIds, nodes, edges, startedAt, hops, cats, elapsed, stars, flashToast]);
 
+  const skipIntro = () => {
+    introDone.current = true;
+  };
+
+  // ---- effects ----
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    if (startParam) {
+      introDone.current = true;
+      return;
+    }
+    const seq: [string, string][] = [
+      ["black-hole", "spaghettification"],
+      ["spaghettification", "pasta"],
+    ];
+    let i = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const step = () => {
+      if (introDone.current) return;
+      if (i >= seq.length) {
+        setSelectedId("pasta");
+        introDone.current = true;
+        return;
+      }
+      const [from, to] = seq[i++];
+      addHop(from, to, true);
+      timers.push(setTimeout(step, 1500));
+    };
+    timers.push(setTimeout(step, 900));
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const iv = setInterval(
+      () => setElapsed(Math.round((Date.now() - startedAt) / 60000)),
+      15000,
+    );
+    return () => clearInterval(iv);
+  }, [startedAt]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--accent", accent);
+  }, [accent]);
+
+  useEffect(() => {
+    const eventSource = new EventSource("/api/extension/hop");
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "WIKI_PAGE_LOAD") {
+        const id = resolveId(data.title);
+        if (presentIds.has(id)) {
+          handleSelect(id);
+          apiRef.current?.focus(id);
+        } else {
+          spawnNode(data.title);
+        }
+      } else if (data.type === "WIKI_HOP") {
+        addHop(data.from, data.to, true);
+      }
+    };
+    return () => eventSource.close();
+  }, [addHop, handleSelect, spawnNode, resolveId, presentIds]);
+
   return (
     <div className={styles.root} ref={rootRef} onPointerDownCapture={skipIntro}>
       <Starfield density={STARFIELD} />
 
-      <ForceGraph
+      <CanvasGraphEngine
         nodes={nodes}
         edges={edges}
         selectedId={selectedId}
@@ -393,8 +607,9 @@ export default function ExploreMap() {
       {/* spine breadcrumb */}
       <div className={styles.spineRail}>
         {spineIds.map((id, i) => {
-          const a = byId[id];
-          const h = hueOf(a.category);
+          const enriched = enrichedData[id];
+          const a = byId[id] || { title: enriched?.title || id, category: enriched?.category || "Physics" };
+          const h = hueOf(a.category as CategoryName);
           return (
             <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
               {i > 0 ? <span className={styles.spineLink} /> : null}
@@ -452,10 +667,15 @@ export default function ExploreMap() {
             key={selArticle.id}
             article={selArticle}
             presentIds={presentIds}
+            path={selectedPathTitles}
             incomingBridge={incomingBridge}
             accent={accent}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
             onChip={handleChip}
             onClose={() => setSelectedId(null)}
+            onEnrich={handleEnrich}
+            onHighlight={handleHighlight}
           />
         ) : null}
       </AnimatePresence>

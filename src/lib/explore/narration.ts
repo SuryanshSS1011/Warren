@@ -85,9 +85,8 @@ export function bridgeFor(fromId: string, toId: string): string {
   if (BRIDGES[key]) return BRIDGES[key];
   const rev = `${toId}>${fromId}`;
   if (BRIDGES[rev]) return BRIDGES[rev];
-  const a = byId[fromId];
-  const b = byId[toId];
-  if (!a || !b) return "";
+  const a = byId[fromId] || { title: fromId };
+  const b = byId[toId] || { title: toId };
   const templates = [
     `A curious leap from ${a.title} to ${b.title} — two ideas that share more thread than you'd expect.`,
     `From ${a.title}, the trail bends toward ${b.title}, and the connection only looks obvious in hindsight.`,
@@ -114,14 +113,18 @@ const TITLES: Record<string, string> = {
 };
 
 export function titleFor(spineIds: string[]): string {
-  if (!spineIds || spineIds.length < 2) {
-    return spineIds && spineIds[0] ? byId[spineIds[0]].title : "Untitled warren";
+  if (!spineIds || spineIds.length < 1) return "Untitled warren";
+  if (spineIds.length < 2) {
+    const id = spineIds[0];
+    return byId[id]?.title || id;
   }
   const first = spineIds[0];
   const last = spineIds[spineIds.length - 1];
   const key = `${first}>${last}`;
   if (TITLES[key]) return TITLES[key];
-  return `The ${byId[first].title} to ${byId[last].title} Run`;
+  const firstTitle = byId[first]?.title || first;
+  const lastTitle = byId[last]?.title || last;
+  return `The ${firstTitle} to ${lastTitle} Run`;
 }
 
 export type Badge = { name: string; glyph: string };

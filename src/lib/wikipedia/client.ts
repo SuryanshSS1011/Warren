@@ -25,7 +25,7 @@ function sleep(ms: number) {
 /** Fetch through the queue, retrying on 429 (honoring Retry-After) and 5xx with backoff.
     `revalidate` is the per-call Next fetch-cache TTL (seconds); pass the right one per
     endpoint instead of inheriting a single hard-coded value. */
-async function wikiFetch(
+export async function wikiFetch(
   url: string,
   opts?: { revalidate?: number; init?: RequestInit },
 ): Promise<Response> {
@@ -104,6 +104,25 @@ export async function getRelated(title: string): Promise<{ pages: PageSummary[] 
     return { pages: [] };
   }
   return (await res.json()) as { pages: PageSummary[] };
+}
+
+/** Search Wikipedia for articles matching a query. Returns a list of titles. */
+export async function searchWikipedia(query: string, limit = 10): Promise<string[]> {
+  const params = new URLSearchParams({
+    action: "opensearch",
+    format: "json",
+    search: query,
+    limit: String(limit),
+    namespace: "0",
+    origin: "*",
+  });
+  const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`);
+  if (!res.ok) {
+    discard(res);
+    return [];
+  }
+  const data = (await res.json()) as [string, string[], string[], string[]];
+  return data[1] ?? [];
 }
 
 export type BlueLink = { title: string };

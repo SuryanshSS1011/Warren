@@ -7,6 +7,7 @@ let client: Anthropic | undefined;
 export function getAnthropic() {
   if (!client) {
     const { ANTHROPIC_API_KEY } = getServerEnv();
+    if (!ANTHROPIC_API_KEY) return null;
     client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   }
   return client;

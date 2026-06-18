@@ -6,6 +6,8 @@ export type GraphNode = {
   depth: number;
   category: CategoryName;
   title: string;
+  /** User-captured highlights/notes from Wikipedia articles. */
+  researchNotes?: string[];
 };
 
 /** A directed edge between two present nodes. */
@@ -20,6 +22,8 @@ export type GraphEdge = {
 export type GraphApi = {
   fitToView: () => void;
   focus: (id: string) => void;
+  /** Translates a node's graph coordinates to screen-pixels for DOM overlays. */
+  graph2ScreenCoords: (id: string) => { x: number; y: number } | null;
 };
 
 /**

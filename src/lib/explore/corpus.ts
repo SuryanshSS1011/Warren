@@ -5,12 +5,24 @@
      Black hole → Spaghettification → Pasta → Ancient Rome. */
 
 export type CategoryName =
-  | "Physics"
-  | "Food"
-  | "History"
-  | "Culture"
-  | "Nature"
-  | "Language";
+  | "Culture and the arts"
+  | "Geography and places"
+  | "Health and fitness"
+  | "History and events"
+  | "Human activities"
+  | "Mathematics and logic"
+  | "Natural and physical sciences"
+  | "People and self"
+  | "Philosophy and thinking"
+  | "Religion and belief systems"
+  | "Society and social sciences"
+  | "Technology"
+  | "Physics" // Legacy
+  | "Food" // Legacy
+  | "History" // Legacy
+  | "Culture" // Legacy
+  | "Nature" // Legacy
+  | "Language"; // Legacy
 
 export type Article = {
   id: string;
@@ -24,16 +36,31 @@ export type Article = {
   links: string[];
   /** placeholder caption for the lead-image strip */
   imgHint: string;
+  /** User-captured highlights from Wikipedia */
+  researchNotes?: string[];
 };
 
 /** Category → hue. Constant oklch lightness/chroma; only the hue varies. */
 export const CATEGORIES: Record<CategoryName, { label: string; hue: number }> = {
-  Physics: { label: "Physics", hue: 256 },
+  "Culture and the arts": { label: "Culture & Arts", hue: 330 },
+  "Geography and places": { label: "Geography", hue: 150 },
+  "Health and fitness": { label: "Health", hue: 190 },
+  "History and events": { label: "History", hue: 26 },
+  "Human activities": { label: "Activities", hue: 296 },
+  "Mathematics and logic": { label: "Math", hue: 220 },
+  "Natural and physical sciences": { label: "Science", hue: 256 },
+  "People and self": { label: "People", hue: 350 },
+  "Philosophy and thinking": { label: "Philosophy", hue: 280 },
+  "Religion and belief systems": { label: "Religion", hue: 310 },
+  "Society and social sciences": { label: "Society", hue: 200 },
+  Technology: { label: "Technology", hue: 240 },
+  // Legacy mappings for demo article compatibility
+  Physics: { label: "Science", hue: 256 },
   Food: { label: "Food", hue: 72 },
   History: { label: "History", hue: 26 },
-  Culture: { label: "Culture", hue: 330 },
-  Nature: { label: "Nature", hue: 150 },
-  Language: { label: "Language", hue: 296 },
+  Culture: { label: "Culture & Arts", hue: 330 },
+  Nature: { label: "Geography", hue: 150 },
+  Language: { label: "Activities", hue: 296 },
 };
 
 export const hueOf = (cat: string): number =>
@@ -49,296 +76,258 @@ export const ARTICLES: Article[] = [
   {
     id: "black-hole",
     title: "Black hole",
-    category: "Physics",
-    blurb: "A region of spacetime where gravity is so strong that nothing can escape.",
-    extract:
-      "A black hole is a region of spacetime in which gravity pulls so hard that not even light can break free. It forms when enough mass collapses into a small enough volume, folding spacetime around itself. The boundary of no return is called the event horizon, and at the centre theory predicts a singularity of unbounded density.",
-    links: [
-      "event-horizon",
-      "spaghettification",
-      "general-relativity",
-      "singularity",
-      "accretion-disk",
-      "hawking-radiation",
-    ],
-    imgHint: "lead image · black hole",
-  },
-  {
-    id: "event-horizon",
-    title: "Event horizon",
-    category: "Physics",
-    blurb: "The boundary beyond which events cannot affect an outside observer.",
-    extract:
-      "An event horizon is the surface surrounding a black hole from within which nothing can reach an outside observer. To a distant watcher, anything falling in appears to slow and freeze at the edge, reddening into darkness. Despite its drama, the horizon is not a physical wall but a one-way membrane in spacetime.",
-    links: ["black-hole", "photon-sphere", "hawking-radiation", "spacetime"],
-    imgHint: "lead image · event horizon",
+    category: "Natural and physical sciences",
+    blurb: "A region of spacetime where gravity is so strong that nothing, not even light, can escape.",
+    extract: "A black hole is formed when a massive star collapses at the end of its life cycle. The gravity is so intense because matter has been squeezed into a tiny space. This happens at the center of most galaxies, including our own.",
+    links: ["spaghettification", "event-horizon", "general-relativity", "singularity", "accretion-disk", "hawking-radiation"],
+    imgHint: "artist's impression · event horizon",
   },
   {
     id: "spaghettification",
     title: "Spaghettification",
-    category: "Physics",
-    blurb: "The vertical stretching of objects into long thin shapes by tidal forces.",
-    extract:
-      "Spaghettification is the playful name physicists give to the stretching of an object into a long, thin strand as it falls into a strong gravitational field. The pull on the near side vastly exceeds the pull on the far side, drawing matter out like a noodle. The very word borrows from the kitchen to describe one of the universe's most violent processes.",
-    links: ["tidal-force", "black-hole", "pasta", "noodle"],
-    imgHint: "lead image · stretched matter",
-  },
-  {
-    id: "tidal-force",
-    title: "Tidal force",
-    category: "Physics",
-    blurb: "A differential gravitational pull across an extended body.",
-    extract:
-      "A tidal force arises because gravity weakens with distance, so different parts of a large body feel different pulls. The result is a stretching along one axis and a squeezing along the others. The same effect that raises Earth's ocean tides also tears apart matter near a black hole.",
-    links: ["spaghettification", "moon", "ocean-tide"],
-    imgHint: "lead image · tidal stretching",
+    category: "Natural and physical sciences",
+    blurb: "The vertical stretching and horizontal compression of objects into long thin shapes in a very strong gravitational field.",
+    extract: "In astrophysics, spaghettification is the tidal effect caused by strong gravitational fields. Near a black hole, the gravity at your feet is much stronger than at your head, stretching you into a thin noodle.",
+    links: ["black-hole", "tidal-force", "pasta", "noodle"],
+    imgHint: "diagram · tidal stretching",
   },
   {
     id: "general-relativity",
     title: "General relativity",
-    category: "Physics",
+    category: "Natural and physical sciences",
     blurb: "Einstein's geometric theory of gravitation as curved spacetime.",
-    extract:
-      "General relativity recasts gravity not as a force but as the curvature of spacetime produced by mass and energy. Objects simply follow the straightest possible paths through this curved geometry. The theory predicted black holes, the bending of starlight, and ripples called gravitational waves.",
-    links: ["black-hole", "spacetime", "singularity"],
-    imgHint: "lead image · curved spacetime",
+    extract: "General relativity generalizes special relativity and Newton's law of universal gravitation, providing a unified description of gravity as a geometric property of space and time, or spacetime.",
+    links: ["black-hole", "spacetime"],
+    imgHint: "diagram · curved spacetime",
+  },
+  {
+    id: "event-horizon",
+    title: "Event horizon",
+    category: "Natural and physical sciences",
+    blurb: "The boundary around a black hole beyond which no events can affect an outside observer.",
+    extract: "Often called the 'point of no return', the event horizon is the threshold where the escape velocity required to leave the black hole exceeds the speed of light.",
+    links: ["black-hole", "photon-sphere", "hawking-radiation"],
+    imgHint: "illustration · the brink",
   },
   {
     id: "singularity",
     title: "Gravitational singularity",
-    category: "Physics",
-    blurb: "A point where a black hole's density and curvature become infinite.",
-    extract:
-      "A gravitational singularity is the point at the heart of a black hole where known physics breaks down and density appears to become infinite. Here the equations of general relativity stop giving sensible answers. Resolving what truly happens is thought to require a theory of quantum gravity we do not yet have.",
+    category: "Natural and physical sciences",
+    blurb: "A location in spacetime where the gravitational field becomes infinite.",
+    extract: "At the center of a black hole lies the singularity, a point where density and gravity become infinite and the laws of physics as we know them cease to operate.",
     links: ["black-hole", "general-relativity"],
-    imgHint: "lead image · singularity",
+    imgHint: "abstract · infinite density",
   },
   {
     id: "accretion-disk",
     title: "Accretion disk",
-    category: "Physics",
-    blurb: "A rotating disk of matter spiralling onto a massive central body.",
-    extract:
-      "An accretion disk is a flattened band of gas and dust that spirals inward toward a dense object such as a black hole or young star. Friction heats the infalling material until it blazes across the spectrum, often outshining whole galaxies. These disks are how we 'see' black holes that emit no light of their own.",
-    links: ["black-hole", "event-horizon"],
-    imgHint: "lead image · accretion disk",
+    category: "Natural and physical sciences",
+    blurb: "A rotating disk of matter formed by accretion around a massive central body.",
+    extract: "As gas and dust spiral toward a black hole, they frictionally heat up and emit intense radiation, creating a glowing disk that makes the invisible black hole detectable.",
+    links: ["black-hole", "tidal-force"],
+    imgHint: "telescope image · glowing disk",
   },
   {
     id: "hawking-radiation",
     title: "Hawking radiation",
-    category: "Physics",
-    blurb: "Faint thermal radiation theorised to leak from black holes.",
-    extract:
-      "Hawking radiation is a slow trickle of particles predicted to escape from just outside a black hole's horizon. It implies black holes are not perfectly black but slowly evaporate over immense spans of time. The idea united gravity, quantum theory, and thermodynamics in a single startling sentence.",
-    links: ["event-horizon", "black-hole"],
-    imgHint: "lead image · horizon glow",
+    category: "Natural and physical sciences",
+    blurb: "Thermal radiation predicted to be released by black holes due to quantum effects.",
+    extract: "Stephen Hawking showed that black holes aren't completely black but emit small amounts of thermal radiation, eventually causing them to evaporate over trillions of years.",
+    links: ["black-hole", "event-horizon"],
+    imgHint: "diagram · quantum evaporation",
   },
   {
-    id: "photon-sphere",
-    title: "Photon sphere",
-    category: "Physics",
-    blurb: "A region where gravity bends light into unstable circular orbits.",
-    extract:
-      "The photon sphere is a thin shell around a black hole where gravity is exactly strong enough to bend light into a circle. A beam aimed just right could, in principle, orbit and return to its source. It is the bright ring that frames the first images of a black hole's shadow.",
-    links: ["event-horizon", "black-hole"],
-    imgHint: "lead image · photon ring",
-  },
-  {
-    id: "spacetime",
-    title: "Spacetime",
-    category: "Physics",
-    blurb: "The unified four-dimensional fabric of space and time.",
-    extract:
-      "Spacetime weaves the three dimensions of space together with time into a single four-dimensional continuum. Mass and energy bend this fabric, and that bending is what we feel as gravity. The notion replaced the idea of absolute, separate space and time that had stood since Newton.",
-    links: ["general-relativity", "black-hole"],
-    imgHint: "lead image · spacetime grid",
-  },
-  {
-    id: "moon",
-    title: "Moon",
-    category: "Nature",
-    blurb: "Earth's only natural satellite and the brightest object in the night sky.",
-    extract:
-      "The Moon is Earth's single natural satellite, locked so that it always shows us the same face. Its gravity raises the twin bulges of the ocean tides and gently slows our planet's spin. It likely formed from debris flung out when a Mars-sized world struck the early Earth.",
-    links: ["tidal-force", "ocean-tide"],
-    imgHint: "lead image · the Moon",
-  },
-  {
-    id: "ocean-tide",
-    title: "Tide",
-    category: "Nature",
-    blurb: "The regular rise and fall of sea levels caused by gravity.",
-    extract:
-      "Tides are the slow heartbeat of the oceans, rising and falling as the Moon and Sun tug on Earth's waters. Two bulges of water sweep around the planet each day as it rotates beneath them. Coastlines, navigators, and countless marine creatures all keep time by them.",
-    links: ["moon", "tidal-force"],
-    imgHint: "lead image · ocean tide",
+    id: "tidal-force",
+    title: "Tidal force",
+    category: "Natural and physical sciences",
+    blurb: "The effect of a gravitational field that stretches a body along the line towards the center of mass.",
+    extract: "A tidal force is a secondary effect of the force of gravity; it is responsible for the tides, tidal locking, and the shredding of celestial bodies that wander too close to black holes.",
+    links: ["spaghettification", "moon", "ocean-tide"],
+    imgHint: "diagram · gravitational gradient",
   },
 
-  // ---- Food ----
+  // ---- Food & Cuisine ----
   {
     id: "pasta",
     title: "Pasta",
-    category: "Food",
-    blurb: "A staple of Italian cuisine made from unleavened durum wheat dough.",
-    extract:
-      "Pasta is a family of foods made by mixing durum wheat semolina with water or egg, then shaping and drying or boiling it. It comes in hundreds of forms, from threadlike strands to ridged tubes and folded parcels. Cheap, keepable, and endlessly versatile, it became one of the defining foods of the Italian table.",
-    links: ["spaghetti", "durum-wheat", "italian-cuisine", "ancient-rome", "noodle"],
-    imgHint: "lead image · dried pasta",
+    category: "Culture and the arts",
+    blurb: "A staple food of Italian cuisine, typically made from an unleavened dough of wheat flour mixed with water or eggs.",
+    extract: "Pasta comes in hundreds of different shapes, from long strands like spaghetti to tubes like penne. It is usually boiled and served with a variety of sauces, reflecting regional Italian traditions.",
+    links: ["spaghettification", "spaghetti", "durum-wheat", "italian-cuisine", "ancient-rome", "noodle"],
+    imgHint: "photo · fresh fettuccine",
   },
   {
     id: "spaghetti",
     title: "Spaghetti",
-    category: "Food",
-    blurb: "Long, thin, cylindrical pasta — the archetypal Italian noodle.",
-    extract:
-      "Spaghetti is a long, thin, cylindrical pasta whose name comes from the Italian for 'little strings'. Traditionally rolled from durum wheat and water, it pairs with sauces from simple oil and garlic to slow-cooked ragù. Its tidy strands made it the pasta the rest of the world pictures first.",
-    links: ["pasta", "italian-cuisine", "tomato"],
-    imgHint: "lead image · spaghetti",
+    category: "Culture and the arts",
+    blurb: "A long, thin, solid, cylindrical pasta.",
+    extract: "Spaghetti is the most iconic form of pasta. It is a staple of traditional Italian cuisine and is famously paired with tomato sauce, meatballs, or simply olive oil and garlic.",
+    links: ["pasta", "italian-cuisine"],
+    imgHint: "photo · twirling spaghetti",
   },
   {
     id: "durum-wheat",
     title: "Durum wheat",
-    category: "Food",
-    blurb: "A hard wheat prized for pasta and semolina flour.",
-    extract:
-      "Durum is the hardest of the cultivated wheats, with a high protein content that gives dough its strength and bite. Milled coarsely it yields semolina, the golden flour at the heart of dried pasta. It thrives in the hot, dry summers of the Mediterranean basin.",
-    links: ["pasta", "semolina", "italian-cuisine"],
-    imgHint: "lead image · durum wheat",
+    category: "Natural and physical sciences",
+    blurb: "A hard variety of wheat used especially to make semolina for pasta.",
+    extract: "Durum is the hardest of all wheats. Its high protein content and strength make it ideal for pasta dough, allowing it to hold its shape during boiling.",
+    links: ["pasta", "semolina"],
+    imgHint: "photo · wheat stalks",
   },
   {
     id: "semolina",
     title: "Semolina",
-    category: "Food",
-    blurb: "Coarse golden flour milled from durum wheat.",
-    extract:
-      "Semolina is the gritty, pale-gold flour produced when hard durum wheat is ground coarsely. Its high gluten content makes resilient dough that holds its shape when shaped and dried. Beyond pasta it thickens puddings and dusts the bottoms of baking loaves.",
+    category: "Culture and the arts",
+    blurb: "The coarse, purified wheat middlings of durum wheat.",
+    extract: "Semolina is the essential ingredient for dry pasta. Its golden color and sandy texture provide the 'al dente' bite that defines quality Italian noodles.",
     links: ["durum-wheat", "pasta"],
-    imgHint: "lead image · semolina flour",
-  },
-  {
-    id: "noodle",
-    title: "Noodle",
-    category: "Food",
-    blurb: "An unleavened dough rolled flat and cut, then cooked in liquid.",
-    extract:
-      "A noodle is a strand or sheet of unleavened dough, boiled, fried, or bathed in broth. Versions appear independently across Asia and Europe, from hand-pulled wheat to rice and buckwheat. Long-distance trade carried techniques and tastes for them along routes like the Silk Road.",
-    links: ["pasta", "spaghetti"],
-    imgHint: "lead image · noodles",
+    imgHint: "photo · golden flour",
   },
   {
     id: "italian-cuisine",
     title: "Italian cuisine",
-    category: "Food",
-    blurb: "The regional cooking traditions of the Italian peninsula.",
-    extract:
-      "Italian cuisine is less a single style than a patchwork of fiercely local traditions built on a few superb ingredients. Olive oil, wheat, tomatoes, and cheese recur from Alpine north to sun-baked south. Many of its rhythms — bread, wine, the shared table — reach back to ancient Rome.",
+    category: "Culture and the arts",
+    blurb: "The deeply regional cooking traditions of Italy, known for their simplicity and high-quality ingredients.",
+    extract: "Italian cuisine is characterized by its reliance on fresh, seasonal products like olive oil, cheese, and tomatoes. It is arguably the most popular and influential cuisine in the world.",
     links: ["pasta", "ancient-rome", "olive-oil", "tomato"],
-    imgHint: "lead image · Italian table",
-  },
-  {
-    id: "tomato",
-    title: "Tomato",
-    category: "Food",
-    blurb: "A New World fruit that became central to Mediterranean cooking.",
-    extract:
-      "The tomato is a fruit native to the Americas that reached Europe only after the voyages of the sixteenth century. At first grown as an ornamental curiosity, it slowly conquered the southern Italian kitchen. Today it is hard to picture Italian food without it — a reminder of how recent some 'timeless' traditions are.",
-    links: ["italian-cuisine", "spaghetti"],
-    imgHint: "lead image · tomatoes",
+    imgHint: "photo · tuscan table",
   },
   {
     id: "olive-oil",
     title: "Olive oil",
-    category: "Food",
-    blurb: "A liquid fat pressed from olives, central to Mediterranean diets.",
-    extract:
-      "Olive oil is pressed from the fruit of the olive tree and has anointed Mediterranean cooking, lamps, and rituals for millennia. The Romans graded, traded, and shipped it across their empire in vast clay jars. Its flavours range from grassy and sharp to mellow and buttery depending on fruit and press.",
-    links: ["italian-cuisine", "ancient-rome", "roman-cuisine"],
-    imgHint: "lead image · olive oil",
+    category: "Culture and the arts",
+    blurb: "A liquid fat obtained from olives, a traditional tree crop of the Mediterranean Basin.",
+    extract: "Commonly used in cooking, olive oil is the backbone of the Mediterranean diet. It has been a staple of human civilization for thousands of years, used for food, fuel, and medicine.",
+    links: ["italian-cuisine", "ancient-rome"],
+    imgHint: "photo · green-gold oil",
+  },
+  {
+    id: "tomato",
+    title: "Tomato",
+    category: "Nature",
+    blurb: "The edible berry of the plant Solanum lycopersicum, often used as a vegetable ingredient.",
+    extract: "While now a staple of Italian cooking, tomatoes are actually native to the Americas. they were brought to Europe in the 16th century and slowly transformed the continent's kitchens.",
+    links: ["italian-cuisine"],
+    imgHint: "photo · vine-ripened tomatoes",
   },
 
-  // ---- History / Culture ----
+  // ---- History & Antiquity ----
   {
     id: "ancient-rome",
     title: "Ancient Rome",
-    category: "History",
-    blurb: "A civilisation that grew from a city-state into a Mediterranean empire.",
-    extract:
-      "Ancient Rome began as a small settlement on the Tiber and grew, over centuries, into an empire ringing the Mediterranean. Its roads, law, language, and engineering shaped the western world long after the city's power faded. Roman tables, too, left their mark — wheat, oil, and wine were the staples of daily life.",
-    links: ["roman-empire", "roman-cuisine", "latin", "colosseum", "appian-way"],
-    imgHint: "lead image · Roman forum",
+    category: "History and events",
+    blurb: "The civilization that grew from a small town on the Tiber River into an empire spanning the entire Mediterranean.",
+    extract: "Rome's legacy includes its language (Latin), its laws, its architecture, and its engineering. At its peak, it was the most powerful and influential civilization in the Western world.",
+    links: ["pasta", "roman-empire", "roman-cuisine", "latin", "colosseum", "appian-way"],
+    imgHint: "photo · the Roman Forum",
   },
   {
     id: "roman-empire",
     title: "Roman Empire",
-    category: "History",
-    blurb: "The imperial phase of ancient Roman civilisation after the Republic.",
-    extract:
-      "The Roman Empire was the era when Rome was ruled by emperors, stretching at its height from Britain to the Persian Gulf. A common coinage, road network, and legal system bound together an astonishing diversity of peoples. Its slow transformation, rather than sudden fall, reshaped Europe for the next thousand years.",
-    links: ["ancient-rome", "pax-romana", "latin", "appian-way"],
-    imgHint: "lead image · Roman empire map",
+    category: "History and events",
+    blurb: "The post-Republican period of ancient Rome, characterized by government by emperors.",
+    extract: "The Empire reached its greatest extent under Trajan, controlling territory from Britain to Egypt. It provided a long period of relative stability known as the Pax Romana.",
+    links: ["ancient-rome", "pax-romana", "latin"],
+    imgHint: "map · mediterranean sprawl",
   },
   {
     id: "roman-cuisine",
-    title: "Ancient Roman cuisine",
-    category: "History",
-    blurb: "The foods and dining customs of the ancient Roman world.",
-    extract:
-      "Roman cuisine ranged from the plain porridge of farmers to the spectacular banquets of the elite. Bread, olives, wine, and a pungent fermented fish sauce called garum flavoured nearly everything. The reclining dinner, or convivium, was as much about status and conversation as about the food.",
-    links: ["ancient-rome", "olive-oil", "garum"],
-    imgHint: "lead image · Roman banquet",
-  },
-  {
-    id: "latin",
-    title: "Latin",
-    category: "Language",
-    blurb: "The classical language of ancient Rome and parent of the Romance tongues.",
-    extract:
-      "Latin was the language of Rome, carried across its empire by soldiers, traders, and scribes. From its everyday spoken form grew Italian, Spanish, French, Portuguese, and Romanian. Long after it ceased to be anyone's mother tongue it remained the language of scholarship, law, and the church.",
-    links: ["ancient-rome", "roman-empire"],
-    imgHint: "lead image · Latin inscription",
-  },
-  {
-    id: "colosseum",
-    title: "Colosseum",
-    category: "History",
-    blurb: "The vast amphitheatre at the heart of ancient Rome.",
-    extract:
-      "The Colosseum is the giant stone amphitheatre that still anchors the centre of Rome. Opened around 80 AD, it could seat tens of thousands for gladiatorial games and staged spectacles. Its tiers of arches became a model for stadiums built ever since.",
-    links: ["ancient-rome", "roman-empire"],
-    imgHint: "lead image · Colosseum",
+    title: "Roman cuisine",
+    category: "Culture and the arts",
+    blurb: "The food and dining habits of ancient Romans, focusing on cereals, legumes, and fermented sauces.",
+    extract: "Ancient Roman food was often heavily flavored with garum (fish sauce) and herbs. For the elite, banquets were a way to show off wealth through exotic ingredients and complex recipes.",
+    links: ["ancient-rome", "garum", "olive-oil"],
+    imgHint: "fresco · a Roman feast",
   },
   {
     id: "garum",
     title: "Garum",
-    category: "History",
-    blurb: "A fermented fish sauce that flavoured the ancient Roman kitchen.",
-    extract:
-      "Garum was a pungent sauce of fermented fish that the Romans splashed over almost every dish. Made by salting and curing fish in the sun, it delivered a deep savoury punch much like modern fish sauces of Southeast Asia. It was produced in seaside factories and shipped across the empire in sealed jars.",
-    links: ["roman-cuisine", "ancient-rome"],
-    imgHint: "lead image · garum jars",
-  },
-  {
-    id: "appian-way",
-    title: "Appian Way",
-    category: "History",
-    blurb: "One of the earliest and most strategically vital Roman roads.",
-    extract:
-      "The Appian Way was among the first great Roman roads, begun in 312 BC to speed armies and trade south from Rome. Paved in tight-fitting stone, stretches of it still run arrow-straight across the countryside. 'All roads lead to Rome' began with engineering like this.",
-    links: ["ancient-rome", "roman-empire"],
-    imgHint: "lead image · Appian Way",
+    category: "Culture and the arts",
+    blurb: "A fermented fish sauce used as a condiment in the cuisines of ancient Greece, Rome, and Carthage.",
+    extract: "Garum was the salt of the ancient world. It was produced by fermenting fish innards in salt vats, resulting in a pungent, umami-rich liquid that appeared in almost every Roman recipe.",
+    links: ["roman-cuisine", "olive-oil"],
+    imgHint: "archaeology · amphorae",
   },
   {
     id: "pax-romana",
     title: "Pax Romana",
-    category: "History",
-    blurb: "A two-century span of relative peace across the Roman Empire.",
-    extract:
-      "The Pax Romana, or 'Roman Peace', was a roughly two-hundred-year stretch of relative stability across the empire beginning with Augustus. Trade, building, and travel flourished under a single law and currency. It is often cited as the high-water mark of Roman prosperity.",
+    category: "History and events",
+    blurb: "A roughly 200-year-long period of relative peace and stability across the Roman Empire.",
+    extract: "Beginning with Augustus, the Pax Romana was the high-water mark of Roman prosperity, allowing for unprecedented trade and the spread of Roman culture across three continents.",
     links: ["roman-empire", "ancient-rome"],
     imgHint: "lead image · Pax Romana",
+  },
+  {
+    id: "latin",
+    title: "Latin",
+    category: "Human activities",
+    blurb: "The classical language of ancient Rome, which became the ancestor of the Romance languages.",
+    extract: "Latin was the administrative and military tongue of the Roman Empire. Long after the empire fell, it remained the international language of science, law, and the Church.",
+    links: ["ancient-rome", "roman-empire"],
+    imgHint: "photo · stone inscription",
+  },
+  {
+    id: "colosseum",
+    title: "Colosseum",
+    category: "History and events",
+    blurb: "An oval amphitheatre in the centre of the city of Rome, the largest ever built.",
+    extract: "The Colosseum was used for gladiatorial contests and public spectacles. It stands as an iconic symbol of Imperial Rome and one of the greatest feats of Roman engineering.",
+    links: ["ancient-rome"],
+    imgHint: "photo · the Flavian Amphitheatre",
+  },
+  {
+    id: "appian-way",
+    title: "Appian Way",
+    category: "History and events",
+    blurb: "One of the earliest and most strategically important Roman roads of the ancient republic.",
+    extract: "The Appian Way connected Rome to Brindisi. It was a masterpiece of paving, so well-built that parts of it are still in use today, two millennia later.",
+    links: ["ancient-rome"],
+    imgHint: "photo · ancient paving stones",
+  },
+
+  // ---- Misc / Cross-links ----
+  {
+    id: "noodle",
+    title: "Noodle",
+    category: "Culture and the arts",
+    blurb: "A type of food made from unleavened dough which is rolled flat and cut into variety of shapes.",
+    extract: "While often associated with Italy, noodles have ancient origins in China dating back 4,000 years. They are a universal comfort food found in nearly every culture on Earth.",
+    links: ["spaghettification", "pasta"],
+    imgHint: "photo · hand-pulled noodles",
+  },
+  {
+    id: "moon",
+    title: "Moon",
+    category: "Natural and physical sciences",
+    blurb: "Earth's only natural satellite and the fifth largest satellite in the Solar System.",
+    extract: "The Moon is the brightest object in our night sky. Its gravitational pull is the primary cause of the ocean tides on Earth and has influenced human culture for ages.",
+    links: ["tidal-force", "ocean-tide"],
+    imgHint: "photo · lunar surface",
+  },
+  {
+    id: "ocean-tide",
+    title: "Ocean tide",
+    category: "Natural and physical sciences",
+    blurb: "The rise and fall of sea levels caused by the combined effects of the gravitational forces exerted by the Moon and the Sun.",
+    extract: "Tides are the daily breathing of the world's oceans. They create unique ecosystems in the intertidal zone and have been used for navigation and power for centuries.",
+    links: ["tidal-force", "moon"],
+    imgHint: "photo · low tide at Mont Saint-Michel",
+  },
+  {
+    id: "spacetime",
+    title: "Spacetime",
+    category: "Natural and physical sciences",
+    blurb: "Any mathematical model that fuses the three dimensions of space and the one dimension of time into a single four-dimensional continuum.",
+    extract: "In Einstein's universe, space and time are not separate stages but a single fabric that can be bent and warped by mass and energy.",
+    links: ["general-relativity", "black-hole"],
+    imgHint: "abstract · the fabric of reality",
   },
 ];
 
 export const byId: Record<string, Article> = Object.fromEntries(
   ARTICLES.map((a) => [a.id, a]),
+);
+
+export const byTitle: Record<string, Article> = Object.fromEntries(
+  ARTICLES.map((a) => [a.title, a]),
 );

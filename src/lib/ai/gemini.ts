@@ -7,7 +7,7 @@ let client: GoogleGenAI | undefined;
 export function getGemini() {
   if (!client) {
     const { GEMINI_API_KEY } = getServerEnv();
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
+    if (!GEMINI_API_KEY) return null;
     client = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   }
   return client;

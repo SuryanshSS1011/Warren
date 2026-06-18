@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 280px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #111116;
+      color: #eee;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .logo {
+      width: 24px;
+      height: 24px;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .status {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .status b {
+      color: #e9b44c;
+    }
+    .hint {
+      margin-top: 16px;
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg class="logo" viewBox="0 0 36 28">
+      <line x1="6" y1="21" x2="14" y2="8" stroke="#e9b44c" stroke-width="2" />
+      <line x1="14" y1="8" x2="24" y2="15" stroke="#e9b44c" stroke-width="2" />
+      <line x1="24" y1="15" x2="31" y2="6" stroke="#e9b44c" stroke-width="2" />
+      <circle cx="31" cy="6" r="4" fill="#e9b44c" />
+    </svg>
+    <div class="title">Warren Live</div>
+  </div>
+  <div class="status">
+    <b>Connected</b><br>
+    Browsing Wikipedia will now automatically grow your map in the Warren app.
+  </div>
+  <p class="hint">Make sure Warren is running on localhost:3000</p>
+</body>
+</html>

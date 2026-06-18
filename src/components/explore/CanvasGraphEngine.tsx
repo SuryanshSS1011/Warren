@@ -4,15 +4,14 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useCallback,
+  useImperativeHandle,
+  forwardRef,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import styles from "@/app/explore.module.css";
 import { hueOf, labelOf } from "@/lib/explore/corpus";
-import { detailFor, LOD, type GraphEdge, type GraphEngineProps, type GraphNode } from "./types";
-
-// The DOM-tile implementation of the graph engine seam. Must satisfy GraphEngineProps so
-// a future canvas engine can drop in unchanged (see types.ts and the migration task).
-type ForceGraphProps = GraphEngineProps;
+import { detailFor, LOD, type GraphEdge, type GraphEngineProps, type GraphNode, type GraphApi } from "./types";
 
 type NodeTileProps = {
   node: GraphNode;
@@ -21,15 +20,13 @@ type NodeTileProps = {
   width: number;
   hue: number;
   labelOn: boolean;
-  /** "dot" collapses the tile to a small node at high node counts (level-of-detail) */
   detail: "tile" | "dot";
   accent: string;
   registerPos: (el: HTMLDivElement | null) => void;
   onDown: (ev: ReactPointerEvent) => void;
 };
 
-/* A single article tile. Plays its birth animation on mount, then strips the class so a
-   frozen-timeline environment still lands on the visible base state. */
+/** A single article tag/tile. */
 function NodeTile({
   node,
   onSpine,
@@ -43,6 +40,7 @@ function NodeTile({
   onDown,
 }: NodeTileProps) {
   const innerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const el = innerRef.current;
     if (!el) return;
@@ -51,8 +49,6 @@ function NodeTile({
     return () => clearTimeout(t);
   }, []);
 
-  // Level-of-detail: at high node counts, non-spine/non-selected nodes collapse to a
-  // compact dot (optionally labeled) so the DOM stays light. Spine/selected stay full.
   if (detail === "dot") {
     return (
       <div ref={registerPos} className={styles.nodePos} onPointerDown={onDown}>
@@ -82,17 +78,14 @@ function NodeTile({
       <div
         ref={innerRef}
         className={cls}
-        title={node.title}
-        style={
-          {
-            "--cat-h": hue,
-            "--accent": accent,
-            width: `${width}px`,
-            borderColor: onSpine
-              ? `oklch(0.72 0.14 ${hue} / 0.55)`
-              : `oklch(0.72 0.14 ${hue} / 0.55)`,
-          } as React.CSSProperties
-        }
+        style={{
+          "--cat-h": hue,
+          "--accent": accent,
+          width: `${width}px`,
+          borderColor: onSpine
+            ? `oklch(0.72 0.14 ${hue} / 0.55)`
+            : `oklch(0.7 0.06 ${hue} / 0.22)`,
+        } as React.CSSProperties}
       >
         <div
           className={styles.thumb}
@@ -140,10 +133,11 @@ type DragState =
 
 const edgeKey = (e: GraphEdge) => `${e.source}→${e.target}`;
 
-/** DOM tile nodes over an SVG edge layer, driven by a hand-rolled force simulation.
-    Physics pre-settles synchronously on each structural change (robust without rAF) and
-    rAF is used purely for live motion + camera lerp, with a setTimeout snap fallback. */
-export default function ForceGraph(props: ForceGraphProps) {
+/** 
+ * DOM-based Graph Engine using "Tag" style nodes. 
+ * Replaces the canvas implementation to restore the requested aesthetic.
+ */
+const CanvasGraphEngine = forwardRef<GraphApi, GraphEngineProps>((props, ref) => {
   const {
     nodes,
     edges,
@@ -171,22 +165,18 @@ export default function ForceGraph(props: ForceGraphProps) {
   );
   const firstFit = useRef(true);
   const propsRef = useRef(props);
-  // mirror latest props into a ref so the rAF loop + physics read live values, not the
-  // closure captured on first render. A layout effect (declared first) guarantees this
-  // runs before the structural settle effect below, and never during render.
+
   useLayoutEffect(() => {
     propsRef.current = props;
   });
 
   const spineSet = new Set(spineIds || []);
 
-  // ---- ensure a sim node exists for every graph node ----
   function ensureSim() {
     const s = sim.current;
     const { nodes: ns, edges: es } = propsRef.current;
     ns.forEach((n) => {
       if (!s.has(n.id)) {
-        // spawn near parent (an edge whose target is this node), else center
         let px = 0;
         let py = 0;
         const parentEdge = es.find((e) => e.target === n.id && s.has(e.source));
@@ -202,7 +192,6 @@ export default function ForceGraph(props: ForceGraphProps) {
         s.set(n.id, { x: px, y: py, vx: 0, vy: 0, fx: null, fy: null });
       }
     });
-    // prune removed
     Array.from(s.keys()).forEach((id) => {
       if (!ns.find((n) => n.id === id)) s.delete(id);
     });
@@ -212,7 +201,6 @@ export default function ForceGraph(props: ForceGraphProps) {
     alpha.current = Math.max(alpha.current, a == null ? 0.9 : a);
   }
 
-  // ---- physics tick ----
   function tick() {
     const s = sim.current;
     const { nodes: ns, edges: es } = propsRef.current;
@@ -220,14 +208,13 @@ export default function ForceGraph(props: ForceGraphProps) {
       n: GraphNode;
       p: SimNode;
     }[];
-    const REPEL = 22000;
+    const REPEL = 26000;
     const SPRING = 0.04;
     const CENTER = 0.0085;
     const DAMP = 0.82;
     const a = alpha.current;
 
     if (a > 0.006) {
-      // repulsion (O(n^2), tiny n)
       for (let i = 0; i < list.length; i++) {
         for (let j = i + 1; j < list.length; j++) {
           const A = list[i].p;
@@ -250,7 +237,6 @@ export default function ForceGraph(props: ForceGraphProps) {
           B.vy -= uy * f * 0.5;
         }
       }
-      // link springs
       es.forEach((e) => {
         const A = s.get(e.source);
         const B = s.get(e.target);
@@ -258,7 +244,7 @@ export default function ForceGraph(props: ForceGraphProps) {
         const dx = B.x - A.x;
         const dy = B.y - A.y;
         const d = Math.sqrt(dx * dx + dy * dy) || 1;
-        const L = e.spine ? 200 : 168;
+        const L = e.spine ? 220 : 180;
         const f = SPRING * (d - L) * a;
         const ux = dx / d;
         const uy = dy / d;
@@ -267,7 +253,6 @@ export default function ForceGraph(props: ForceGraphProps) {
         B.vx -= ux * f;
         B.vy -= uy * f;
       });
-      // centering + integrate
       list.forEach(({ p }) => {
         p.vx -= p.x * CENTER * a;
         p.vy -= p.y * CENTER * a;
@@ -291,8 +276,7 @@ export default function ForceGraph(props: ForceGraphProps) {
     }
   }
 
-  // ---- camera ----
-  function focus(id: string, opts?: { zoom?: number }) {
+  const focus = useCallback((id: string, opts?: { zoom?: number }) => {
     const p = sim.current.get(id);
     if (!p) return;
     const vp = viewportRef.current;
@@ -304,9 +288,9 @@ export default function ForceGraph(props: ForceGraphProps) {
     const rb = propsRef.current.reserveBottom || 0;
     c.tx = (w - rr) / 2 - p.x * c.tzoom;
     c.ty = (h - rb) / 2 - p.y * c.tzoom;
-  }
+  }, []);
 
-  function fitToView() {
+  const fitToView = useCallback(() => {
     const s = sim.current;
     if (s.size === 0) return;
     let minX = Infinity;
@@ -334,9 +318,8 @@ export default function ForceGraph(props: ForceGraphProps) {
     c.tzoom = z;
     c.tx = availW / 2 - ((minX + maxX) / 2) * z;
     c.ty = availH / 2 - ((minY + maxY) / 2) * z;
-  }
+  }, []);
 
-  // ---- render frame ----
   function paint() {
     const c = cam.current;
     c.x += (c.tx - c.x) * 0.12;
@@ -367,7 +350,6 @@ export default function ForceGraph(props: ForceGraphProps) {
         ln.setAttribute("y2", String(B.y));
       }
     });
-    // particles travel along spine edges
     const t = performance.now() / 1000;
     particles.current.forEach((pt) => {
       const A = s.get(pt.from);
@@ -383,23 +365,21 @@ export default function ForceGraph(props: ForceGraphProps) {
     });
   }
 
-  function snapCamera() {
+  const snapCamera = useCallback(() => {
     const c = cam.current;
     c.x = c.tx;
     c.y = c.ty;
     c.zoom = c.tzoom;
     paint();
-  }
+  }, []);
 
-  // run the simulation synchronously to a resting state (robust without rAF)
   function settle(iters: number) {
     alpha.current = 1;
     for (let i = 0; i < (iters || 200); i++) tick();
     alpha.current = 0;
   }
 
-  // move camera to a node; lerps when rAF is alive, snaps as a fallback
-  function gotoFocus(id: string) {
+  const gotoFocus = useCallback((id: string) => {
     focus(id);
     const c = cam.current;
     setTimeout(() => {
@@ -410,9 +390,8 @@ export default function ForceGraph(props: ForceGraphProps) {
       )
         snapCamera();
     }, 150);
-  }
+  }, [focus, snapCamera]);
 
-  // ---- main loop ----
   useEffect(() => {
     let raf = 0;
     const loop = () => {
@@ -422,10 +401,8 @@ export default function ForceGraph(props: ForceGraphProps) {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-     
   }, []);
 
-  // when graph structure changes: ensure sim, settle, rebuild particles, focus newest
   useLayoutEffect(() => {
     ensureSim();
     settle(firstFit.current ? 240 : 200);
@@ -454,34 +431,33 @@ export default function ForceGraph(props: ForceGraphProps) {
         return { key, els, from: e.source, to: e.target };
       });
     if (newestId) focus(newestId);
-    else fitToView();
+    else if (firstFit.current) fitToView();
     snapCamera();
     firstFit.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length, edges.length]);
 
+  const api: GraphApi = {
+    fitToView: () => {
+      fitToView();
+      const c = cam.current;
+      setTimeout(() => {
+        if (Math.abs(c.zoom - c.tzoom) > 0.02 || Math.abs(c.x - c.tx) > 2)
+          snapCamera();
+      }, 150);
+    },
+    focus: gotoFocus,
+  };
+
+  useImperativeHandle(ref, () => api, [api]);
+
   useEffect(() => {
-    onReady({
-      fitToView: () => {
-        fitToView();
-        const c = cam.current;
-        setTimeout(() => {
-          if (Math.abs(c.zoom - c.tzoom) > 0.02 || Math.abs(c.x - c.tx) > 2)
-            snapCamera();
-        }, 150);
-      },
-      focus: gotoFocus,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    onReady(api);
   }, []);
 
-  // focus selection changes
   useEffect(() => {
     if (selectedId) gotoFocus(selectedId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // ---- pointer interaction ----
   function clientToWorld(cx: number, cy: number) {
     const vp = viewportRef.current!.getBoundingClientRect();
     const c = cam.current;
@@ -565,15 +541,14 @@ export default function ForceGraph(props: ForceGraphProps) {
     if (!vp) return;
     vp.addEventListener("wheel", onWheel, { passive: false });
     return () => vp.removeEventListener("wheel", onWheel);
-     
   }, []);
 
-  // depth → size
   const sizeFor = (n: GraphNode) => Math.max(96, 150 - (n.depth || 0) * 9);
 
   return (
     <div
       className={`${styles.viewport} ${dimmed ? styles.dimmed : ""}`}
+      style={{ position: "absolute", inset: 0, zIndex: 5 }}
       ref={viewportRef}
       onPointerDown={onPointerDownBg}
     >
@@ -602,8 +577,6 @@ export default function ForceGraph(props: ForceGraphProps) {
         {nodes.map((n) => {
           const onSpine = spineSet.has(n.id);
           const isSel = selectedId === n.id;
-          // Level-of-detail by node count (see types.ts LOD): collapse far nodes to dots,
-          // and force-hide non-spine labels once the graph is dense.
           const detail = detailFor(nodes.length, { onSpine, isSelected: isSel });
           const dense = nodes.length > LOD.FORCE_HIDE_LABELS_AT;
           const labelOn = onSpine || isSel || (showAllLabels && !dense);
@@ -619,7 +592,6 @@ export default function ForceGraph(props: ForceGraphProps) {
               detail={detail}
               accent={accent}
               registerPos={(el) => {
-                // delete the entry on unmount so paint() never iterates a stale element
                 if (el) posRefs.current.set(n.id, el);
                 else posRefs.current.delete(n.id);
               }}
@@ -630,4 +602,8 @@ export default function ForceGraph(props: ForceGraphProps) {
       </div>
     </div>
   );
-}
+});
+
+CanvasGraphEngine.displayName = "CanvasGraphEngine";
+
+export default CanvasGraphEngine;
