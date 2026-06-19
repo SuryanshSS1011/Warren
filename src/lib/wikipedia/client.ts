@@ -108,6 +108,43 @@ export async function getRelated(title: string): Promise<{ pages: PageSummary[] 
 
 export type BlueLink = { title: string };
 
+const CATEGORY_TTL = 60 * 60 * 24 * 30; // 30 days — an article's category is stable
+
+// Wikipedia maintenance/meta categories that aren't meaningful topic labels.
+const META_CATEGORY =
+  /^(Articles|All |Pages |Wikipedia|Webarchive|CS1|Use |Short description|Commons|Good articles|Featured|Coordinates|Hidden|Disambiguation|Redirects|Wikidata|Engvar|Dynamic lists|Vague|Use dmy|Use mdy)/i;
+
+/** The article's top "real" Wikipedia category — used to color live nodes by Wikipedia's
+    own taxonomy rather than a fixed enum. Returns the first non-hidden, non-meta category. */
+export async function getArticleCategory(title: string): Promise<string | null> {
+  return cached(`wiki:category:${title}`, CATEGORY_TTL, async () => {
+    const params = new URLSearchParams({
+      action: "query",
+      format: "json",
+      prop: "categories",
+      titles: title,
+      clshow: "!hidden",
+      cllimit: "20",
+      redirects: "1",
+      origin: "*",
+    });
+    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: CATEGORY_TTL });
+    if (!res.ok) {
+      discard(res);
+      return null;
+    }
+    const data = (await res.json()) as {
+      query?: { pages?: Record<string, { categories?: { title: string }[] }> };
+    };
+    const pages = data.query?.pages ?? {};
+    const cats = Object.values(pages)
+      .flatMap((p) => p.categories ?? [])
+      .map((c) => c.title.replace(/^Category:/, ""))
+      .filter((c) => !META_CATEGORY.test(c));
+    return cats[0] ?? null;
+  });
+}
+
 // Namespaces that are not real articles (File:, Help:, Category:, etc.).
 const NON_ARTICLE_PREFIX = /^(File|Image|Help|Category|Template|Wikipedia|Portal|Special|Talk|User|Module|Draft|MediaWiki):/i;
 

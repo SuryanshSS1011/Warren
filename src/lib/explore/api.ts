@@ -12,6 +12,7 @@ export type LiveSummary = {
 };
 
 export type LiveLinks = { links: { title: string }[] };
+export type LiveCategory = { category: string | null };
 
 /** SWR fetcher: GET a JSON endpoint, throwing on non-2xx so SWR surfaces the error. */
 export async function jsonFetcher<T>(url: string): Promise<T> {
@@ -25,6 +26,9 @@ export const summaryKey = (title: string | null) =>
 
 export const linksKey = (title: string | null, limit = 40) =>
   title ? `/api/wiki/links?title=${encodeURIComponent(title)}&limit=${limit}` : null;
+
+export const categoryKey = (title: string | null) =>
+  title ? `/api/wiki/category?title=${encodeURIComponent(title)}` : null;
 
 /** POST a from→to pair to get the cached AI bridge sentence. */
 export async function fetchBridge(

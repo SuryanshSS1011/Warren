@@ -36,8 +36,21 @@ export const CATEGORIES: Record<CategoryName, { label: string; hue: number }> = 
   Language: { label: "Language", hue: 296 },
 };
 
-export const hueOf = (cat: string): number =>
-  (CATEGORIES as Record<string, { hue: number }>)[cat]?.hue ?? 256;
+/** Stable hue (0–360) derived by hashing an arbitrary category string. Lets live
+    Wikipedia nodes — whose categories come straight from Wikipedia, not our fixed enum —
+    get a consistent, meaningful color (same category → same hue) without a hardcoded
+    taxonomy. The constants spread hues around the wheel and keep them deterministic. */
+export function hueFromString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  // golden-angle step gives good separation between similar strings
+  return Math.round(((h % 1000) / 1000) * 360);
+}
+
+export const hueOf = (cat: string): number => {
+  const known = (CATEGORIES as Record<string, { hue: number }>)[cat];
+  return known ? known.hue : hueFromString(cat);
+};
 
 export const labelOf = (cat: string): string =>
   (CATEGORIES as Record<string, { label: string }>)[cat]?.label ?? cat;

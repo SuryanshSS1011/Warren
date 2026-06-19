@@ -5,16 +5,13 @@
 // This resolves the corpus-slug ↔ Wikipedia-title mismatch without special-casing the
 // graph: every node has an id, a title, a category, an extract, and a list of link ids.
 
-import {
-  type Article,
-  type CategoryName,
-  byId as corpusById,
-} from "./corpus";
+import { type Article, byId as corpusById } from "./corpus";
 
 export type ResolvedArticle = {
   id: string;
   title: string;
-  category: CategoryName;
+  /** corpus enum value OR a live Wikipedia category string (hashed to a hue) */
+  category: string;
   blurb: string;
   extract: string;
   /** ids of articles you can burrow into (corpus slugs and/or live: ids) */
@@ -43,12 +40,14 @@ export function wikiTitleFor(id: string): string {
 // across renders without re-fetching; the component drives writes via upsertLive().
 const liveCache = new Map<string, ResolvedArticle>();
 
-/** Wikipedia has no clean category signal in the summary; default live nodes to a neutral
-    hue. (A future pass could derive this from Wikidata "instance of".) */
-const DEFAULT_LIVE_CATEGORY: CategoryName = "Physics";
+// Live nodes derive their category from Wikipedia itself (see useLiveArticle →
+// /api/wiki/category). Until that resolves, fall back to a neutral label that still
+// hashes to a stable hue via hueOf().
+const DEFAULT_LIVE_CATEGORY = "Topic";
 
 export function upsertLive(article: {
   title: string;
+  category?: string;
   extract?: string;
   description?: string;
   thumbnail?: string;
@@ -59,7 +58,7 @@ export function upsertLive(article: {
   const resolved: ResolvedArticle = {
     id,
     title: article.title,
-    category: existing?.category ?? DEFAULT_LIVE_CATEGORY,
+    category: article.category ?? existing?.category ?? DEFAULT_LIVE_CATEGORY,
     blurb: article.description ?? existing?.blurb ?? "",
     extract: article.extract ?? existing?.extract ?? "",
     links: article.links ?? existing?.links ?? [],
