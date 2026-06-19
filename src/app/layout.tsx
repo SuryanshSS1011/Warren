@@ -5,6 +5,7 @@ import {
   Space_Mono,
   Newsreader,
 } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -48,7 +49,10 @@ export default function RootLayout({
       lang="en"
       className={`${spaceGrotesk.variable} ${hanken.variable} ${spaceMono.variable} ${newsreader.variable} h-full`}
     >
-      <body className="h-full">{children}</body>
+      <body className="h-full">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
