@@ -59,7 +59,15 @@ export default function ArticlePalette({
     onOpenChange(false);
   };
 
-  // Hide live titles that exactly match a corpus title (avoid duplicate rows).
+  // We filter both lists ourselves (cmdk's own filter would drop live results whose title
+  // doesn't lexically contain the query, e.g. "NYC" → "New York City"). Corpus: simple
+  // case-insensitive match over title/category/blurb. Live: already filtered by the API.
+  const q = query.trim().toLowerCase();
+  const corpusMatches = q
+    ? ARTICLES.filter((a) =>
+        `${a.title} ${labelOf(a.category)} ${a.blurb}`.toLowerCase().includes(q),
+      )
+    : ARTICLES;
   const corpusTitles = new Set(ARTICLES.map((a) => a.title.toLowerCase()));
   const liveOnly = wikiResults.filter((t) => !corpusTitles.has(t.toLowerCase()));
 
@@ -71,8 +79,8 @@ export default function ArticlePalette({
           <VisuallyHidden>
             <Dialog.Title>Find an article</Dialog.Title>
           </VisuallyHidden>
-          {/* shouldFilter only applies to the corpus group; live items are pre-filtered by the API */}
-          <Command label="Find an article" loop>
+          {/* we filter both lists ourselves (see above), so disable cmdk's own filter */}
+          <Command label="Find an article" loop shouldFilter={false}>
             <Command.Input
               className={styles.cmdInput}
               placeholder="Search the corpus or all of Wikipedia…"
@@ -83,8 +91,9 @@ export default function ArticlePalette({
             <Command.List className={styles.listScroll}>
               <Command.Empty className={styles.cmdEmpty}>No matching articles.</Command.Empty>
 
-              <Command.Group heading="Corpus">
-                {ARTICLES.map((a) => {
+              {corpusMatches.length > 0 ? (
+                <Command.Group heading="Corpus">
+                  {corpusMatches.map((a) => {
                   const h = hueOf(a.category);
                   const inMap = present.has(a.id);
                   return (
@@ -111,7 +120,8 @@ export default function ArticlePalette({
                     </Command.Item>
                   );
                 })}
-              </Command.Group>
+                </Command.Group>
+              ) : null}
 
               {liveOnly.length > 0 ? (
                 <Command.Group heading="Wikipedia">

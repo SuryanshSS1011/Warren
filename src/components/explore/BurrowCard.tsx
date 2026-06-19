@@ -79,10 +79,15 @@ export default function BurrowCard({
       if (event.origin !== "null" && event.origin !== window.location.origin) return;
       const data = event.data as WikiMessage | undefined;
       if (!data || typeof data !== "object") return;
+      // validate each field's shape — a malformed/spoofed message must not reach handlers
       if (data.type === "WIKI_HOP") {
-        onHopTo?.(data.from, data.to);
+        if (typeof data.from === "string" && typeof data.to === "string" && data.from && data.to) {
+          onHopTo?.(data.from, data.to);
+        }
       } else if (data.type === "WIKI_HIGHLIGHT") {
-        onHighlight?.(articleId, data.text);
+        if (typeof data.text === "string" && data.text.trim()) {
+          onHighlight?.(articleId, data.text);
+        }
       }
     };
     window.addEventListener("message", onMessage);

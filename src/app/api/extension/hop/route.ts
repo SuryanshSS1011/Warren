@@ -59,7 +59,13 @@ export async function GET(req: NextRequest) {
   const stream = new ReadableStream({
     start(controller) {
       const listener = (data: HopMessage) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          // controller already closed (client disconnected mid-broadcast) — drop the
+          // dead listener so a POST's forEach can't throw on a closed stream.
+          listeners.delete(listener);
+        }
       };
       listeners.add(listener);
       req.signal.addEventListener("abort", () => {

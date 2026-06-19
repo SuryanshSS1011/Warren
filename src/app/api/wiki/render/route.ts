@@ -21,8 +21,13 @@ export async function GET(req: NextRequest) {
 
   // The parent origin the injected script is allowed to message (no wildcard).
   const appOrigin = getPublicEnv().NEXT_PUBLIC_APP_URL;
-  const safeTitle = JSON.stringify(title); // safe to embed in a <script> string literal
-  const safeOrigin = JSON.stringify(appOrigin);
+  // JSON.stringify alone does NOT neutralize `</script>` or `<` inside a <script> string
+  // literal — the HTML parser still ends the block. Escape `<` and `/` to \u-sequences so
+  // attacker-supplied titles can't break out of the script context.
+  const scriptSafe = (s: string) =>
+    JSON.stringify(s).replace(/</g, "\\u003c").replace(/\//g, "\\u002f");
+  const safeTitle = scriptSafe(title);
+  const safeOrigin = scriptSafe(appOrigin);
 
   const wikiUrl = `https://en.m.wikipedia.org/wiki/${encodeURIComponent(title)}`;
 
