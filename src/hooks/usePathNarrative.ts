@@ -56,7 +56,18 @@ export function usePathNarrative(focusedNodeId: string | null, path: string[]) {
         }
         const data = (await res.json()) as { narrative: string };
         narrativeCache.set(pathKey, data.narrative);
-        if (!cancelled) setNarrative(data.narrative);
+        if (!cancelled) {
+          setNarrative(data.narrative);
+
+          if (typeof pendo !== "undefined") {
+            pendo.track("narrative_generated", {
+              path_length: path.length,
+              path_start_title: path[0],
+              path_end_title: path[path.length - 1],
+              narrative_length: data.narrative.length,
+            });
+          }
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Unknown error");
       } finally {

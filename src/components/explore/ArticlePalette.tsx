@@ -55,9 +55,21 @@ export default function ArticlePalette({
   }, [query]);
 
   const pickTitle = (title: string) => {
+    const wasInMap = present.has(liveIdFor(title));
+    const resultPosition = titles.indexOf(title);
+
     upsertLive({ title });
     onPick(liveIdFor(title));
     onOpenChange(false);
+
+    if (typeof pendo !== "undefined") {
+      pendo.track("palette_article_picked", {
+        title,
+        query: query.trim(),
+        was_in_map: wasInMap,
+        result_position: resultPosition,
+      });
+    }
   };
 
   // Empty query → starter topics; otherwise the live Wikipedia results (already

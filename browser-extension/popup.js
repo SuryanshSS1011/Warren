@@ -29,6 +29,15 @@ document.getElementById("save").addEventListener("click", () => {
     chrome.storage.sync.set({ warrenUrl, warrenToken }, () => {
       statusEl.textContent = "Connected — browse Wikipedia to grow your map.";
       statusEl.className = "status ok";
+
+      try {
+        const domain = new URL(warrenUrl).hostname;
+        if (typeof pendo !== "undefined") {
+          pendo.track("extension_configured", {
+            warren_url_domain: domain,
+          });
+        }
+      } catch { /* ignore tracking errors */ }
     });
   });
 });

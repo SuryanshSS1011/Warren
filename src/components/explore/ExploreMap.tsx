@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
-import { hueOf } from "@/lib/explore/hue";
+import { hueOf, STARTER_TOPICS } from "@/lib/explore/hue";
 import { liveIdFor, placeholder, resolve, upsertLive } from "@/lib/explore/article-store";
 import { bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
@@ -163,6 +163,14 @@ export default function ExploreMap() {
       setAnnounce(`Added ${(resolve(toId) ?? placeholder(toId)).title}. ${bridge}`);
       // then upgrade the template bridge to the live AI sentence in the background
       void refineBridge(fromId, toId, bridge);
+
+      if (typeof pendo !== "undefined") {
+        pendo.track("hop_added", {
+          from_title: titleOf(fromId),
+          to_title: titleOf(toId),
+          is_spine: asSpine,
+        });
+      }
     },
     [flashSubtitle, refineBridge, titleOf],
   );
@@ -241,6 +249,17 @@ export default function ExploreMap() {
     setSpineIds([id]);
     setNewestId(id);
     setSelectedId(id);
+
+    const starterIndex = STARTER_TOPICS.indexOf(title);
+    const isSearchResult = starterIndex === -1;
+    if (typeof pendo !== "undefined") {
+      pendo.track("exploration_started", {
+        topic_title: title,
+        source: isSearchResult ? "search" : "starter_topic",
+        is_search_result: isSearchResult,
+        starter_topic_index: starterIndex,
+      });
+    }
   }, []);
 
   // elapsed timer
@@ -351,7 +370,15 @@ export default function ExploreMap() {
   const handleExport = useCallback(() => {
     if (rootRef.current) {
       const slug = autoTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      void exportWarrenImage(rootRef.current, `${slug || "warren"}.png`);
+      const filename = `${slug || "warren"}.png`;
+      void exportWarrenImage(rootRef.current, filename);
+
+      if (typeof pendo !== "undefined") {
+        pendo.track("warren_image_exported", {
+          warren_title: autoTitle,
+          filename,
+        });
+      }
     }
   }, [autoTitle]);
 
@@ -385,6 +412,25 @@ export default function ExploreMap() {
     [selectedId, spineIds, addHop, handleChip, present.length],
   );
 
+  // Wrapper for in-article hops (blue links in the Wikipedia iframe). Tracks the hop source
+  // separately from extension hops, which go through handleHopToRef directly.
+  const handleInArticleHop = useCallback(
+    (fromTitle: string, toTitle: string) => {
+      const wasAlreadyInMap = presentIds.has(liveIdFor(toTitle));
+      handleHopTo(fromTitle, toTitle);
+
+      if (typeof pendo !== "undefined") {
+        pendo.track("in_article_hop", {
+          from_title: fromTitle,
+          to_title: toTitle,
+          was_already_in_map: wasAlreadyInMap,
+        });
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handleHopTo, present.length],
+  );
+
   const handleHighlight = useCallback(
     (nodeId: string, text: string) => {
       if (!text) return;
@@ -393,8 +439,16 @@ export default function ExploreMap() {
         [nodeId]: [...(prev[nodeId] ?? []), text],
       }));
       flashToast("Highlight saved");
+
+      if (typeof pendo !== "undefined") {
+        pendo.track("text_highlighted", {
+          node_id: nodeId,
+          article_title: titleOf(nodeId),
+          highlight_length: text.length,
+        });
+      }
     },
-    [flashToast],
+    [flashToast, titleOf],
   );
 
   // Keep the latest handleHopTo in a ref so the SSE connection (below) doesn't tear down
@@ -414,6 +468,13 @@ export default function ExploreMap() {
         const msg = JSON.parse(ev.data) as { type: string; from?: string; to?: string };
         if (msg.type === "WIKI_HOP" && msg.from && msg.to) {
           handleHopToRef.current(msg.from, msg.to);
+
+          if (typeof pendo !== "undefined") {
+            pendo.track("extension_hop_received", {
+              from_title: msg.from,
+              to_title: msg.to,
+            });
+          }
         }
       } catch {
         /* ignore malformed events */
@@ -484,11 +545,26 @@ export default function ExploreMap() {
         return;
       }
       const full = `${window.location.origin}${data.url}`;
+      let clipboardSuccess = true;
       try {
         await navigator.clipboard.writeText(full);
         flashToast("Share link copied to clipboard ✦");
       } catch {
+        clipboardSuccess = false;
         flashToast(`Shared: ${full}`);
+      }
+
+      if (typeof pendo !== "undefined") {
+        pendo.track("warren_shared", {
+          warren_title: snapshot.title,
+          node_count: snapshot.nodes.length,
+          edge_count: snapshot.edges.length,
+          hops: snapshot.stats.hops,
+          categories: snapshot.stats.categories,
+          minutes_elapsed: snapshot.stats.minutes,
+          stars: snapshot.stats.stars,
+          clipboard_copy_success: clipboardSuccess,
+        });
       }
     } catch {
       flashToast("Couldn't reach the server.");
@@ -699,7 +775,7 @@ export default function ExploreMap() {
             pathTitles={pathTitles}
             onChip={handleChip}
             onClose={() => setSelectedId(null)}
-            onHopTo={handleHopTo}
+            onHopTo={handleInArticleHop}
             onHighlight={handleHighlight}
           />
         ) : null}
