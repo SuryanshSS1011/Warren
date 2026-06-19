@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
@@ -17,8 +17,8 @@ import Starfield from "./Starfield";
 import WarrenList from "./WarrenList";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
 
-const DEFAULT_ACCENT = "#e9b44c"; // antique gold (Star Chart spine)
-const ACCENT_SWATCHES = ["#e9b44c", "#8aa0ff", "#b58cff", "#5fd9c2", "#ff8fab"];
+// The spine/edge accent is fixed antique gold — the Star Chart identity (no color picker).
+const ACCENT = "#e9b44c";
 const STARFIELD = 0.9;
 const MOBILE_BP = 880;
 
@@ -58,7 +58,7 @@ function Subtitle({ text }: { text: string }) {
 
 export default function ExploreMap() {
   // ---- tweakable display state ----
-  const [accent, setAccent] = useState(DEFAULT_ACCENT);
+  const accent = ACCENT;
   const [showAllLabels, setShowAllLabels] = useState(false);
 
   // ---- graph state ----
@@ -308,6 +308,16 @@ export default function ExploreMap() {
   const maxDepth = nodes.reduce((m, n) => Math.max(m, n.depth), 0);
   const stars = Math.min(5, Math.max(1, maxDepth + 1));
 
+  // Journey SUMMARY that stays a fixed size at any node count (4 nodes or 400): the
+  // dominant categories you've crossed, ranked by frequency, capped with a "+N more".
+  const topCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of nodes) counts.set(n.category, (counts.get(n.category) ?? 0) + 1);
+    const ranked = [...counts.keys()].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+    return { top: ranked.slice(0, 4), more: Math.max(0, ranked.length - 4) };
+  }, [nodes]);
+  const deepestPath = maxDepth + 1; // longest chain length (nodes), not abstract stars
+
   const isMobile = viewportW < MOBILE_BP;
   const reserveRight = selArticle && !isMobile ? 412 : 0;
   // On mobile, keep the graph framed below the top HUD band (brand + controls + stats)
@@ -489,6 +499,31 @@ export default function ExploreMap() {
         role="toolbar"
         aria-label="Map controls"
       >
+        {/* zoom cluster: −  ⌖ recenter  +  ⤢ fit — discoverable, beyond wheel/pinch */}
+        <div className={styles.zoomCluster}>
+          <button
+            className={styles.zoomBtn}
+            aria-label="Zoom out"
+            onClick={() => apiRef.current?.zoomBy(1 / 1.3)}
+          >
+            −
+          </button>
+          <button
+            className={styles.zoomBtn}
+            aria-label="Recenter"
+            title="Recenter"
+            onClick={() => apiRef.current?.recenter()}
+          >
+            ⌖
+          </button>
+          <button
+            className={styles.zoomBtn}
+            aria-label="Zoom in"
+            onClick={() => apiRef.current?.zoomBy(1.3)}
+          >
+            +
+          </button>
+        </div>
         <button className={styles.ctl} onClick={() => apiRef.current?.fitToView()}>
           ⤢ Fit
         </button>
@@ -513,19 +548,6 @@ export default function ExploreMap() {
         <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
           ◫ Gallery
         </Link>
-        {ACCENT_SWATCHES.map((c) => (
-          <button
-            key={c}
-            className={styles.swatch}
-            aria-label={`Accent ${c}`}
-            aria-pressed={accent === c}
-            onClick={() => setAccent(c)}
-            style={{
-              background: c,
-              borderColor: accent === c ? "var(--ink)" : "var(--line)",
-            }}
-          />
-        ))}
         <span className={styles.ctlHint}>drag to pan · scroll to zoom</span>
       </div>
 
@@ -555,28 +577,40 @@ export default function ExploreMap() {
 
       {/* stat strip */}
       <div className={styles.statStrip}>
+        {/* journey shape — the one summary that abstracts any node count into a glyph */}
+        {badge ? (
+          <div className={styles.journeyShape}>
+            <span className={styles.journeyGlyph}>{badge.glyph}</span>
+            {badge.name}
+          </div>
+        ) : null}
+        <span className={styles.statSep}>·</span>
         <div className={styles.stat}>
           <b>{hops}</b> hops
         </div>
         <span className={styles.statSep}>·</span>
         <div className={styles.stat}>
-          <b>{cats}</b> categories
+          deepest path <b>{deepestPath}</b>
         </div>
-        <span className={styles.statSep}>·</span>
-        <div className={styles.stat}>
-          <b>{elapsed}</b> min
-        </div>
-        <span className={styles.statSep}>·</span>
-        <div className={styles.statDive}>
-          deepest dive
-          <span className={styles.stars}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <span key={i} className={`${styles.star} ${i < stars ? styles.starOn : ""}`}>
-                ★
-              </span>
-            ))}
-          </span>
-        </div>
+        {topCategories.top.length > 0 ? (
+          <>
+            <span className={styles.statSep}>·</span>
+            {/* dominant fields crossed — fixed width via top-N + "+N", scales to 100s */}
+            <div className={styles.fields}>
+              {topCategories.top.map((c) => (
+                <span
+                  key={c}
+                  className={styles.fieldDot}
+                  style={{ background: `oklch(0.72 0.15 ${hueOf(c)})` }}
+                  title={c}
+                />
+              ))}
+              {topCategories.more > 0 ? (
+                <span className={styles.fieldMore}>+{topCategories.more}</span>
+              ) : null}
+            </div>
+          </>
+        ) : null}
       </div>
 
       {/* connective-tissue subtitle */}
