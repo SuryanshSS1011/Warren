@@ -80,7 +80,7 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
         spineIds={spineIds}
         newestId={newestId}
         accent="#e9b44c"
-        showAllLabels
+        labelMode="all"
         dimmed={false}
         panMode={false}
         reserveRight={0}
