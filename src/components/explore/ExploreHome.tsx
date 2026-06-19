@@ -29,7 +29,18 @@ export default function ExploreHome({ onPick }: ExploreHomeProps) {
         const res = await fetch(`/api/wiki/search?q=${encodeURIComponent(q)}`);
         if (!res.ok) return;
         const data = (await res.json()) as { results: string[] };
-        if (!cancelled) setResults(data.results ?? []);
+        if (!cancelled) {
+          const resultList = data.results ?? [];
+          setResults(resultList);
+
+          if (typeof pendo !== "undefined") {
+            pendo.track("wikipedia_searched", {
+              query: q,
+              results_count: resultList.length,
+              search_context: "home",
+            });
+          }
+        }
       } catch {
         /* ignore — starter topics still offered */
       }
