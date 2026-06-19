@@ -12,7 +12,7 @@ import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
 import BurrowCard from "./BurrowCard";
-import ForceGraph from "./ForceGraph";
+import CanvasGraphEngine from "./CanvasGraphEngine";
 import Starfield from "./Starfield";
 import WarrenList from "./WarrenList";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
@@ -60,6 +60,7 @@ export default function ExploreMap() {
   // ---- tweakable display state ----
   const accent = ACCENT;
   const [showAllLabels, setShowAllLabels] = useState(false);
+  const [panMode, setPanMode] = useState(false);
 
   // ---- graph state ----
   const [present, setPresent] = useState<Present[]>([{ id: START_ID, depth: 0 }]);
@@ -318,6 +319,20 @@ export default function ExploreMap() {
   }, [nodes]);
   const deepestPath = maxDepth + 1; // longest chain length (nodes), not abstract stars
 
+  // Spine breadcrumb stays a single fixed-height row at any length: show the origin, an
+  // ellipsis carrying the hidden count, then the most recent few. Never wraps, never grows.
+  const SPINE_HEAD = 1;
+  const SPINE_TAIL = 4;
+  const spineCrumbs = useMemo<({ id: string } | { gap: number })[]>(() => {
+    if (spineIds.length <= SPINE_HEAD + SPINE_TAIL + 1) {
+      return spineIds.map((id) => ({ id }));
+    }
+    const head = spineIds.slice(0, SPINE_HEAD).map((id) => ({ id }));
+    const tail = spineIds.slice(-SPINE_TAIL).map((id) => ({ id }));
+    const gap = spineIds.length - SPINE_HEAD - SPINE_TAIL;
+    return [...head, { gap }, ...tail];
+  }, [spineIds]);
+
   const isMobile = viewportW < MOBILE_BP;
   const reserveRight = selArticle && !isMobile ? 412 : 0;
   // On mobile, keep the graph framed below the top HUD band (brand + controls + stats)
@@ -451,7 +466,7 @@ export default function ExploreMap() {
     <div className={styles.root} ref={rootRef} onPointerDownCapture={skipIntro}>
       <Starfield density={STARFIELD} />
 
-      <ForceGraph
+      <CanvasGraphEngine
         nodes={nodes}
         edges={edges}
         selectedId={selectedId}
@@ -460,6 +475,7 @@ export default function ExploreMap() {
         accent={accent}
         showAllLabels={showAllLabels}
         dimmed={!!selArticle}
+        panMode={panMode}
         reserveRight={reserveRight}
         reserveBottom={reserveBottom}
         reserveTop={reserveTop}
@@ -499,7 +515,8 @@ export default function ExploreMap() {
         role="toolbar"
         aria-label="Map controls"
       >
-        {/* zoom cluster: −  ⌖ recenter  +  ⤢ fit — discoverable, beyond wheel/pinch */}
+        {/* zoom cluster: −  ⤢ fit-to-view  +  — the middle button frames the whole graph
+            (one control; no separate Fit button — they were redundant) */}
         <div className={styles.zoomCluster}>
           <button
             className={styles.zoomBtn}
@@ -510,11 +527,11 @@ export default function ExploreMap() {
           </button>
           <button
             className={styles.zoomBtn}
-            aria-label="Recenter"
-            title="Recenter"
-            onClick={() => apiRef.current?.recenter()}
+            aria-label="Fit to view"
+            title="Fit to view"
+            onClick={() => apiRef.current?.fitToView()}
           >
-            ⌖
+            ⤢
           </button>
           <button
             className={styles.zoomBtn}
@@ -524,8 +541,13 @@ export default function ExploreMap() {
             +
           </button>
         </div>
-        <button className={styles.ctl} onClick={() => apiRef.current?.fitToView()}>
-          ⤢ Fit
+        <button
+          className={`${styles.ctl} ${panMode ? styles.on : ""}`}
+          onClick={() => setPanMode((v) => !v)}
+          aria-pressed={panMode}
+          title={panMode ? "Pan mode: drag to move the map" : "Drag nodes to rearrange; turn on to pan"}
+        >
+          ✥ Pan
         </button>
         <button
           className={`${styles.ctl} ${showAllLabels ? styles.on : ""}`}
@@ -548,23 +570,32 @@ export default function ExploreMap() {
         <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
           ◫ Gallery
         </Link>
-        <span className={styles.ctlHint}>drag to pan · scroll to zoom</span>
       </div>
 
-      {/* spine breadcrumb */}
+      {/* spine breadcrumb — fixed single row; collapses the middle when long */}
       <nav className={styles.spineRail} aria-label="Your path (spine)">
-        {spineIds.map((id, i) => {
-          const a = resolve(id) ?? placeholder(id);
+        {spineCrumbs.map((c, i) => {
+          if ("gap" in c) {
+            return (
+              <span key="gap" style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                <span className={styles.spineLink} />
+                <span className={styles.spineGap} title={`${c.gap} more steps`}>
+                  +{c.gap}
+                </span>
+              </span>
+            );
+          }
+          const a = resolve(c.id) ?? placeholder(c.id);
           const h = hueOf(a.category);
           return (
-            <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+            <span key={c.id} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
               {i > 0 ? <span className={styles.spineLink} /> : null}
               <button
-                className={`${styles.spinePill} ${selectedId === id ? styles.active : ""}`}
+                className={`${styles.spinePill} ${selectedId === c.id ? styles.active : ""}`}
                 style={{ "--cat-h": h } as React.CSSProperties}
                 onClick={() => {
-                  handleSelect(id);
-                  apiRef.current?.focus(id);
+                  handleSelect(c.id);
+                  apiRef.current?.focus(c.id);
                 }}
               >
                 <span className={styles.spineDot} style={{ background: `oklch(0.72 0.15 ${h})` }} />

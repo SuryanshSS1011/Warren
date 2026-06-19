@@ -46,6 +46,8 @@ export type GraphEngineProps = {
   showAllLabels: boolean;
   /** dim non-spine context nodes (e.g. while a burrow card is open) */
   dimmed: boolean;
+  /** when true, drag pans the canvas; when false (default), drag moves individual nodes */
+  panMode: boolean;
   /** px to reserve on the right so the camera never frames behind the burrow card */
   reserveRight: number;
   /** px to reserve at the bottom for the mobile burrow bottom-sheet */

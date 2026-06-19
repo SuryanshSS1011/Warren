@@ -6,7 +6,7 @@ import Link from "next/link";
 import styles from "@/app/explore.module.css";
 import { hueOf } from "@/lib/explore/corpus";
 import type { SavedWarren } from "@/lib/explore/warren-snapshot";
-import ForceGraph from "./ForceGraph";
+import CanvasGraphEngine from "./CanvasGraphEngine";
 import Starfield from "./Starfield";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
 
@@ -73,7 +73,7 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
     <div className={styles.root}>
       <Starfield density={0.9} />
 
-      <ForceGraph
+      <CanvasGraphEngine
         nodes={nodes}
         edges={edges}
         selectedId={null}
@@ -82,6 +82,7 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
         accent="#e9b44c"
         showAllLabels
         dimmed={false}
+        panMode={false}
         reserveRight={0}
         reserveBottom={0}
         reserveTop={0}
