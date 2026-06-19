@@ -3,7 +3,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import styles from "@/app/explore.module.css";
-import { byId, hueOf, labelOf } from "@/lib/explore/corpus";
+import { hueOf, labelOf } from "@/lib/explore/corpus";
+import { placeholder, resolve } from "@/lib/explore/article-store";
 import type { GraphEdge } from "./types";
 
 type WarrenListProps = {
@@ -37,7 +38,7 @@ export default function WarrenList({
   const branches = presentIds.filter((id) => !spineSet.has(id));
 
   const renderItem = (id: string, index: number | null, onSpine: boolean) => {
-    const a = byId[id];
+    const a = resolve(id) ?? placeholder(id);
     const h = hueOf(a.category);
     const bridge = index === 0 ? null : bridgeInto(id);
     return (

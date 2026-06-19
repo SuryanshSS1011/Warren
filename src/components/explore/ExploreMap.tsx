@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
-import { byId, hueOf, START_ID, type CategoryName } from "@/lib/explore/corpus";
+import { hueOf, START_ID } from "@/lib/explore/corpus";
+import { placeholder, resolve } from "@/lib/explore/article-store";
 import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
+import { fetchBridge, fetchTitle } from "@/lib/explore/api";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
@@ -73,6 +75,8 @@ export default function ExploreMap() {
   const [announce, setAnnounce] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // AI auto-titles keyed by "firstId>lastId"; overlays the canned title when present.
+  const [aiTitles, setAiTitles] = useState<Record<string, string>>({});
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
   const [startedAt] = useState(() => Date.now() - 4 * 60 * 1000);
@@ -84,8 +88,8 @@ export default function ExploreMap() {
   const presentIds = new Set(present.map((p) => p.id));
 
   const nodes: GraphNode[] = present.map((p) => {
-    const a = byId[p.id];
-    return { id: p.id, depth: p.depth, category: a.category as CategoryName, title: a.title };
+    const a = resolve(p.id) ?? placeholder(p.id);
+    return { id: p.id, depth: p.depth, category: a.category, title: a.title };
   });
 
   const flashSubtitle = useCallback((text: string) => {
@@ -94,9 +98,38 @@ export default function ExploreMap() {
     subTimer.current = setTimeout(() => setSubtitle(null), 7000);
   }, []);
 
+  // Refine an edge's bridge with the live AI sentence, then update the edge + (if it's
+  // still the active subtitle) the on-screen subtitle. Falls back silently to the canned
+  // bridge on any error or when AI is unconfigured — the node already rendered optimistically.
+  const refineBridge = useCallback(
+    async (fromId: string, toId: string, fallback: string) => {
+      const from = resolve(fromId);
+      const to = resolve(toId) ?? placeholder(toId);
+      if (!from) return;
+      try {
+        const ai = await fetchBridge(
+          { title: from.title, description: from.blurb },
+          { title: to.title, description: to.blurb },
+        );
+        if (!ai || ai === fallback) return;
+        setEdges((prev) =>
+          prev.map((e) =>
+            e.source === fromId && e.target === toId ? { ...e, bridge: ai } : e,
+          ),
+        );
+        // only swap the visible subtitle if it's still showing this hop's fallback
+        setSubtitle((s) => (s && s.text === fallback ? { ...s, text: ai } : s));
+      } catch {
+        // keep the canned bridge — already shown
+      }
+    },
+    [],
+  );
+
   // ---- add a hop ----
   const addHop = useCallback(
     (fromId: string, toId: string, asSpine: boolean) => {
+      const bridge = bridgeFor(fromId, toId); // instant, canned — optimistic
       setPresent((prev) => {
         if (prev.find((p) => p.id === toId)) return prev;
         const fromDepth = (prev.find((p) => p.id === fromId) || { depth: 0 }).depth;
@@ -104,37 +137,40 @@ export default function ExploreMap() {
       });
       setEdges((prev) => {
         if (prev.find((e) => e.source === fromId && e.target === toId)) return prev;
-        return [...prev, { source: fromId, target: toId, spine: asSpine, bridge: bridgeFor(fromId, toId) }];
+        return [...prev, { source: fromId, target: toId, spine: asSpine, bridge }];
       });
       if (asSpine)
         setSpineIds((prev) => (prev[prev.length - 1] === fromId ? [...prev, toId] : prev));
       setNewestId(toId);
       setSelectedId(toId);
-      const bridge = bridgeFor(fromId, toId);
       flashSubtitle(bridge);
       // ARIA live announcement for screen readers (a11y plan: announce each new node).
-      setAnnounce(`Added ${byId[toId].title}. ${bridge}`);
+      setAnnounce(`Added ${(resolve(toId) ?? placeholder(toId)).title}. ${bridge}`);
+      // then upgrade the canned bridge to the live AI sentence in the background
+      void refineBridge(fromId, toId, bridge);
     },
-    [flashSubtitle],
+    [flashSubtitle, refineBridge],
   );
 
   // ---- chip click ----
   const handleChip = useCallback(
     (fromId: string, toId: string, visited: boolean) => {
       if (visited) {
+        const bridge = bridgeFor(fromId, toId);
         setEdges((prev) =>
           prev.find((e) => e.source === fromId && e.target === toId)
             ? prev
-            : [...prev, { source: fromId, target: toId, spine: false, bridge: bridgeFor(fromId, toId) }],
+            : [...prev, { source: fromId, target: toId, spine: false, bridge }],
         );
         setSelectedId(toId);
         setNewestId(null);
+        void refineBridge(fromId, toId, bridge);
         return;
       }
       const isSpine = spineIds[spineIds.length - 1] === fromId;
       addHop(fromId, toId, isSpine);
     },
-    [spineIds, addHop],
+    [spineIds, addHop, refineBridge],
   );
 
   const handleSelect = useCallback((id: string) => {
@@ -226,7 +262,7 @@ export default function ExploreMap() {
   }, [accent]);
 
   // ---- derived ----
-  const selArticle = selectedId ? byId[selectedId] : null;
+  const selArticle = selectedId ? (resolve(selectedId) ?? placeholder(selectedId)) : null;
   const incomingBridge = (() => {
     if (!selectedId) return null;
     const ins = edges.filter((e) => e.target === selectedId);
@@ -234,7 +270,26 @@ export default function ExploreMap() {
     return sp ? sp.bridge : null;
   })();
 
-  const autoTitle = titleFor(spineIds);
+  // Canned title is instant; an AI title overlays it when available (keyed by first→last
+  // so it re-fetches only when the journey's endpoints change). Falls back to canned.
+  const cannedTitle = titleFor(spineIds, (id) => (resolve(id) ?? placeholder(id)).title);
+  const titleKey = spineIds.length >= 2 ? `${spineIds[0]}>${spineIds[spineIds.length - 1]}` : "";
+  useEffect(() => {
+    if (!titleKey) return;
+    let cancelled = false;
+    const titles = spineIds.map((id) => resolve(id)?.title).filter(Boolean) as string[];
+    fetchTitle(titles)
+      .then((t) => {
+        if (!cancelled && t) setAiTitles((m) => ({ ...m, [titleKey]: t }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleKey]);
+  const autoTitle = (titleKey && aiTitles[titleKey]) || cannedTitle;
+
   const badge = badgeFor(spineIds, nodes.length);
   const hops = Math.max(0, spineIds.length - 1);
   const cats = new Set(nodes.map((n) => n.category)).size;
@@ -243,9 +298,12 @@ export default function ExploreMap() {
 
   const isMobile = viewportW < MOBILE_BP;
   const reserveRight = selArticle && !isMobile ? 412 : 0;
+  // On mobile, keep the graph framed below the top HUD band (brand + controls + stats)
+  // and above the bottom-sheet burrow so nodes never settle behind the chrome.
+  const reserveTop = isMobile ? 150 : 0;
   const reserveBottom =
     selArticle && isMobile
-      ? Math.round((typeof window !== "undefined" ? window.innerHeight : 700) * 0.52)
+      ? Math.round((typeof window !== "undefined" ? window.innerHeight : 700) * 0.56)
       : 0;
 
   const handleExport = useCallback(() => {
@@ -320,9 +378,14 @@ export default function ExploreMap() {
         dimmed={!!selArticle}
         reserveRight={reserveRight}
         reserveBottom={reserveBottom}
+        reserveTop={reserveTop}
         onSelect={handleSelect}
         onReady={handleReady}
       />
+
+      {/* mobile-only backdrop behind the top HUD band so graph nodes that drift up there
+          are occluded instead of bleeding through the controls/stats */}
+      <div className={styles.hudScrim} aria-hidden="true" />
 
       {/* top-left brand + auto-title */}
       <header className={styles.header}>
@@ -346,7 +409,12 @@ export default function ExploreMap() {
       </header>
 
       {/* top-right controls */}
-      <div className={styles.controls} data-export-hide="true">
+      <div
+        className={styles.controls}
+        data-export-hide="true"
+        role="toolbar"
+        aria-label="Map controls"
+      >
         <button className={styles.ctl} onClick={() => apiRef.current?.fitToView()}>
           ⤢ Fit
         </button>
@@ -374,14 +442,11 @@ export default function ExploreMap() {
         {ACCENT_SWATCHES.map((c) => (
           <button
             key={c}
-            className={styles.ctl}
+            className={styles.swatch}
             aria-label={`Accent ${c}`}
+            aria-pressed={accent === c}
             onClick={() => setAccent(c)}
             style={{
-              width: 22,
-              height: 22,
-              padding: 0,
-              borderRadius: 8,
               background: c,
               borderColor: accent === c ? "var(--ink)" : "var(--line)",
             }}
@@ -391,9 +456,9 @@ export default function ExploreMap() {
       </div>
 
       {/* spine breadcrumb */}
-      <div className={styles.spineRail}>
+      <nav className={styles.spineRail} aria-label="Your path (spine)">
         {spineIds.map((id, i) => {
-          const a = byId[id];
+          const a = resolve(id) ?? placeholder(id);
           const h = hueOf(a.category);
           return (
             <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
@@ -412,7 +477,7 @@ export default function ExploreMap() {
             </span>
           );
         })}
-      </div>
+      </nav>
 
       {/* stat strip */}
       <div className={styles.statStrip}>

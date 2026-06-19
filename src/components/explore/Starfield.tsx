@@ -18,6 +18,9 @@ export default function Starfield({ density }: { density: number }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // honor reduced-motion: draw a single static frame, no twinkle/rAF loop
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     let raf = 0;
     let w = 0;
     let h = 0;
@@ -51,6 +54,7 @@ export default function Starfield({ density }: { density: number }) {
         // mostly warm gold/ivory specks with a few cool ones — matches Star Chart
         hue: Math.random() < 0.18 ? 256 : Math.random() < 0.6 ? 70 : 40,
       }));
+      if (reduceMotion) draw(0); // repaint the static field after a resize
     }
 
     function draw(ts: number) {
@@ -71,11 +75,12 @@ export default function Starfield({ density }: { density: number }) {
           ctx!.fill();
         }
       }
-      raf = requestAnimationFrame(draw);
+      if (!reduceMotion) raf = requestAnimationFrame(draw);
     }
 
     build();
-    raf = requestAnimationFrame(draw);
+    // a fixed timestamp gives a calm, non-twinkling static field under reduced motion
+    raf = reduceMotion ? (draw(0), 0) : requestAnimationFrame(draw);
     window.addEventListener("resize", build);
     return () => {
       cancelAnimationFrame(raf);
@@ -83,5 +88,5 @@ export default function Starfield({ density }: { density: number }) {
     };
   }, []);
 
-  return <canvas className={styles.starfield} ref={canvasRef} />;
+  return <canvas className={styles.starfield} ref={canvasRef} aria-hidden="true" />;
 }

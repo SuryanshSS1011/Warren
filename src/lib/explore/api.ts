@@ -40,3 +40,15 @@ export async function fetchBridge(
   const data = (await res.json()) as { bridge: string };
   return data.bridge;
 }
+
+/** POST an ordered list of node titles to get a witty AI auto-title for the journey. */
+export async function fetchTitle(path: string[]): Promise<string> {
+  const res = await fetch("/api/title", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!res.ok) throw new Error(`title ${res.status}`);
+  const data = (await res.json()) as { title: string };
+  return data.title;
+}

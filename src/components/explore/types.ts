@@ -47,6 +47,8 @@ export type GraphEngineProps = {
   reserveRight: number;
   /** px to reserve at the bottom for the mobile burrow bottom-sheet */
   reserveBottom: number;
+  /** px to reserve at the top for the mobile HUD band (brand + controls + stats) */
+  reserveTop: number;
   onSelect: (id: string) => void;
   onReady: (api: GraphApi) => void;
 };
