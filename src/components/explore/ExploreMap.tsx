@@ -367,6 +367,27 @@ export default function ExploreMap() {
     [flashToast],
   );
 
+  // Live sync from the browser extension: each Wikipedia hop the user makes while browsing
+  // streams in here (server-sent events) and spawns the matching node. No-ops when no
+  // extension is connected. WIKI_HOP carries from/to; WIKI_PAGE_LOAD just marks presence.
+  useEffect(() => {
+    const es = new EventSource("/api/extension/hop");
+    es.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data) as { type: string; from?: string; to?: string; title?: string };
+        if (msg.type === "WIKI_HOP" && msg.from && msg.to) {
+          handleHopTo(msg.from, msg.to);
+        }
+      } catch {
+        /* ignore malformed events */
+      }
+    };
+    es.onerror = () => {
+      /* EventSource auto-reconnects; nothing to do */
+    };
+    return () => es.close();
+  }, [handleHopTo]);
+
   const handleShare = useCallback(async () => {
     if (saving) return;
     setSaving(true);
