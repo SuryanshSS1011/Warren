@@ -212,6 +212,19 @@
   font-weight: 500;
 }
 
+/* Zoom-gated context labels ("auto" mode). Visible by default; the overlay gets
+   .labelsCollapsed when zoomed out past LABEL_REVEAL_ZOOM, fading these out so the
+   overview stays clean. Transition makes the reveal feel like focus, not a flicker. */
+.labelGate {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.labelsCollapsed .labelGate {
+  opacity: 0;
+  pointer-events: none;
+}
+
 @keyframes nodeBirth {
   0% {
     transform: scale(0.2);

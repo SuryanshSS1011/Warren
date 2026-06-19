@@ -59,7 +59,9 @@ function Subtitle({ text }: { text: string }) {
 export default function ExploreMap() {
   // ---- tweakable display state ----
   const accent = ACCENT;
-  const [showAllLabels, setShowAllLabels] = useState(false);
+  // label policy for context nodes: "auto" reveals labels as you zoom in (default, scales),
+  // "all" forces every label on, "off" shows only spine/selected. The button cycles these.
+  const [labelMode, setLabelMode] = useState<"auto" | "all" | "off">("auto");
   const [panMode, setPanMode] = useState(false);
 
   // ---- graph state ----
@@ -473,7 +475,7 @@ export default function ExploreMap() {
         spineIds={spineIds}
         newestId={newestId}
         accent={accent}
-        showAllLabels={showAllLabels}
+        labelMode={labelMode}
         dimmed={!!selArticle}
         panMode={panMode}
         reserveRight={reserveRight}
@@ -550,10 +552,19 @@ export default function ExploreMap() {
           ✥ Pan
         </button>
         <button
-          className={`${styles.ctl} ${showAllLabels ? styles.on : ""}`}
-          onClick={() => setShowAllLabels((v) => !v)}
+          className={`${styles.ctl} ${labelMode !== "auto" ? styles.on : ""}`}
+          onClick={() =>
+            setLabelMode((m) => (m === "auto" ? "all" : m === "all" ? "off" : "auto"))
+          }
+          title={
+            labelMode === "auto"
+              ? "Labels: Auto — names reveal as you zoom in"
+              : labelMode === "all"
+                ? "Labels: All — every name shown"
+                : "Labels: Off — only your path is named"
+          }
         >
-          Labels
+          Labels: {labelMode === "auto" ? "Auto" : labelMode === "all" ? "All" : "Off"}
         </button>
         <button className={styles.ctl} onClick={() => setListOpen(true)}>
           ☰ List
