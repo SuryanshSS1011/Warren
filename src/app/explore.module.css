@@ -349,6 +349,42 @@
   color: var(--ink);
   border-color: rgba(244, 239, 227, 0.22);
 }
+
+/* zoom cluster: segmented −/recenter/+ pill */
+.zoomCluster {
+  display: inline-flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.zoomBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--line-soft);
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+.zoomBtn:last-child {
+  border-right: 0;
+}
+.zoomBtn:hover {
+  color: var(--ink);
+  background: rgba(244, 239, 227, 0.06);
+}
 .ctl.on {
   color: var(--accent-hi);
   border-color: color-mix(in oklab, var(--accent), transparent 55%);

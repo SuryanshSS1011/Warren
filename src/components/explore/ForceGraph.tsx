@@ -189,6 +189,9 @@ export default function ForceGraph(props: ForceGraphProps) {
   // active pointers (for multi-touch pinch-zoom) + the in-progress pinch gesture
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; midX: number; midY: number } | null>(null);
+  // pan momentum: last drag velocity + the glide rAF handle
+  const panVel = useRef({ vx: 0, vy: 0 });
+  const momentumRaf = useRef(0);
   const particles = useRef<{ key: string; els: SVGCircleElement[]; from: string; to: string }[]>(
     [],
   );
@@ -437,6 +440,28 @@ export default function ForceGraph(props: ForceGraphProps) {
     }, 150);
   }
 
+  // zoom by a factor about the viewport center (drives the +/− buttons); lerps via paint().
+  function zoomBy(factor: number) {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const r = vp.getBoundingClientRect();
+    const rt = propsRef.current.reserveTop || 0;
+    const rb = propsRef.current.reserveBottom || 0;
+    const rr = propsRef.current.reserveRight || 0;
+    // center of the *visible* area (excluding reserved HUD/burrow bands)
+    zoomAt(r.left + (r.width - rr) / 2, r.top + rt + (r.height - rt - rb) / 2, factor);
+  }
+
+  // re-center on the selected/newest node at a comfortable zoom (the "home" control).
+  function recenter() {
+    const id = propsRef.current.selectedId ?? propsRef.current.newestId;
+    if (id && sim.current.has(id)) {
+      focus(id, { zoom: 1 });
+    } else {
+      fitToView();
+    }
+  }
+
   // ---- main loop ----
   useEffect(() => {
     let raf = 0;
@@ -496,6 +521,8 @@ export default function ForceGraph(props: ForceGraphProps) {
         }, 150);
       },
       focus: gotoFocus,
+      zoomBy,
+      recenter,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -558,8 +585,12 @@ export default function ForceGraph(props: ForceGraphProps) {
     const dist = Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy);
     if (dist > 4) d.moved = true;
     if (d.mode === "pan") {
-      cam.current.tx = d.ox + (ev.clientX - d.sx);
-      cam.current.ty = d.oy + (ev.clientY - d.sy);
+      const ntx = d.ox + (ev.clientX - d.sx);
+      const nty = d.oy + (ev.clientY - d.sy);
+      // track instantaneous velocity for momentum on release
+      panVel.current = { vx: ntx - cam.current.tx, vy: nty - cam.current.ty };
+      cam.current.tx = ntx;
+      cam.current.ty = nty;
       cam.current.x = cam.current.tx;
       cam.current.y = cam.current.ty;
     } else if (d.mode === "node") {
@@ -588,11 +619,43 @@ export default function ForceGraph(props: ForceGraphProps) {
       }
       if (!d.moved) onSelect(d.id);
       heat(0.3);
+    } else if (d && d.mode === "pan" && d.moved) {
+      startMomentum();
     }
     drag.current = null;
   }
 
+  // Glide the camera after a pan flick, decaying the last velocity. Cancelled by any new
+  // pointer-down so a grab stops the glide immediately.
+  function startMomentum() {
+    const v = panVel.current;
+    const speed = Math.hypot(v.vx, v.vy);
+    if (speed < 0.6) return; // ignore slow/precise pans
+    if (momentumRaf.current) cancelAnimationFrame(momentumRaf.current);
+    let { vx, vy } = v;
+    const step = () => {
+      vx *= 0.92;
+      vy *= 0.92;
+      cam.current.tx += vx;
+      cam.current.ty += vy;
+      cam.current.x = cam.current.tx;
+      cam.current.y = cam.current.ty;
+      if (Math.hypot(vx, vy) > 0.3 && !drag.current) {
+        momentumRaf.current = requestAnimationFrame(step);
+      } else {
+        momentumRaf.current = 0;
+      }
+    };
+    momentumRaf.current = requestAnimationFrame(step);
+  }
+
   function trackPointer(ev: ReactPointerEvent) {
+    // a new grab cancels any in-flight momentum glide so the camera stops under the finger
+    if (momentumRaf.current) {
+      cancelAnimationFrame(momentumRaf.current);
+      momentumRaf.current = 0;
+    }
+    panVel.current = { vx: 0, vy: 0 };
     pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
@@ -620,7 +683,12 @@ export default function ForceGraph(props: ForceGraphProps) {
 
   function onWheel(ev: WheelEvent) {
     ev.preventDefault();
-    zoomAt(ev.clientX, ev.clientY, Math.exp(-ev.deltaY * 0.0014));
+    // Normalize delta across input types: line-mode (mouse wheels) reports ~±3 per notch,
+    // pixel-mode (trackpads) reports many small deltas. Clamp so one notch is a smooth,
+    // consistent step and a fast scroll doesn't jump the zoom.
+    const unit = ev.deltaMode === 1 ? 16 : 1; // DOM_DELTA_LINE → ~16px
+    const d = Math.max(-60, Math.min(60, ev.deltaY * unit));
+    zoomAt(ev.clientX, ev.clientY, Math.exp(-d * 0.0022));
   }
 
   useEffect(() => {
