@@ -621,6 +621,85 @@
   background: rgba(244, 239, 227, 0.12);
   border-radius: 8px;
 }
+.burrowTabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--line);
+}
+.burrowTab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: transparent;
+  border: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.burrowTab:hover {
+  color: var(--ink-dim);
+  background: rgba(244, 239, 227, 0.05);
+}
+.burrowTabActive {
+  color: var(--accent-hi);
+  background: color-mix(in oklab, var(--accent), transparent 90%);
+}
+.burrowWiki {
+  flex: 1;
+  min-height: 0;
+  background: #fff;
+  position: relative;
+}
+.wikiFrame {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  border: 0;
+  display: block;
+}
+.pathNarrative {
+  margin: 24px 0;
+  padding: 16px;
+  background: color-mix(in oklch, var(--accent), transparent 92%);
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 80%);
+}
+.narrativeText {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--ink);
+  margin: 8px 0 0;
+  font-style: italic;
+}
+.narrativeError {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-hi);
+  margin: 12px 0 0;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+.narrativeSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.skeletonLine {
+  height: 14px;
+  background: var(--line);
+  border-radius: 4px;
+}
+.skeletonLineShort {
+  height: 14px;
+  background: var(--line);
+  border-radius: 4px;
+  width: 60%;
+}
 .burrowCat {
   display: flex;
   align-items: center;
