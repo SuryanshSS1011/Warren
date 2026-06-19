@@ -42,6 +42,23 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
     return () => clearTimeout(t);
   }, [playing, done, step, total]);
 
+  // track replay completion when the timeline reaches the end
+  useEffect(() => {
+    if (!done) return;
+    if (typeof pendo !== "undefined") {
+      pendo.track("replay_completed", {
+        warren_id: warren.id,
+        warren_title: warren.title,
+        total_steps: total,
+        hops: warren.stats.hops,
+        categories: warren.stats.categories,
+        minutes: warren.stats.minutes,
+      });
+    }
+    // warren and total are stable for the component's lifetime
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+
   // the bridge subtitle for the most-recently revealed node — derived from step, no effect
   const subtitle = useMemo(() => {
     if (step < 2) return null;
