@@ -1,4 +1,4 @@
-import { hueOf } from "@/lib/explore/corpus";
+import { hueOf } from "@/lib/explore/hue";
 import { layoutTrail, smoothPath } from "@/lib/explore/trail";
 
 /** A small gold-trail thumbnail through a warren's spine nodes — the gallery-card

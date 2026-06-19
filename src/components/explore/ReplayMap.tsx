@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
-import { hueOf } from "@/lib/explore/corpus";
+import { hueOf } from "@/lib/explore/hue";
 import type { SavedWarren } from "@/lib/explore/warren-snapshot";
 import CanvasGraphEngine from "./CanvasGraphEngine";
 import Starfield from "./Starfield";
@@ -80,7 +80,7 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
         spineIds={spineIds}
         newestId={newestId}
         accent="#e9b44c"
-        showAllLabels
+        labelMode="all"
         dimmed={false}
         panMode={false}
         reserveRight={0}
