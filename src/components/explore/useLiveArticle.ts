@@ -3,9 +3,11 @@
 import { useEffect } from "react";
 import useSWR from "swr";
 import {
+  categoryKey,
   jsonFetcher,
   linksKey,
   summaryKey,
+  type LiveCategory,
   type LiveLinks,
   type LiveSummary,
 } from "@/lib/explore/api";
@@ -27,23 +29,31 @@ export function useLiveArticle(title: string | null) {
     shouldRetryOnError: false,
     dedupingInterval: 1000 * 60 * 10,
   });
+  // The article's real Wikipedia category → colors the live node by Wikipedia's taxonomy.
+  const category = useSWR<LiveCategory>(categoryKey(title), jsonFetcher, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+    dedupingInterval: 1000 * 60 * 30,
+  });
 
   // A disambiguation response carries no usable extract — treat it as "no live data".
   const data = summary.data;
   const usable = data && data.type !== "disambiguation" ? data : null;
   const liveLinks = links.data?.links ?? null;
+  const liveCategory = category.data?.category ?? null;
 
   // Mirror live data into the shared store so the graph can resolve live: nodes.
   useEffect(() => {
-    if (!usable && !liveLinks) return;
+    if (!usable && !liveLinks && !liveCategory) return;
     upsertLive({
       title: title!,
+      category: liveCategory ?? undefined,
       extract: usable?.extract,
       description: usable?.description,
       thumbnail: usable?.thumbnail?.source,
       links: liveLinks ? liveLinks.map((l) => liveIdFor(l.title)) : undefined,
     });
-  }, [title, usable, liveLinks]);
+  }, [title, usable, liveLinks, liveCategory]);
 
   return {
     live: summary.error ? null : usable,
