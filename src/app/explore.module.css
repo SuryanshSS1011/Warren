@@ -301,7 +301,7 @@
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--ink-faint);
-  margin-bottom: 5px;
+  margin-bottom: 12px;
 }
 .tcTitle {
   font-family: var(--font-serif);
@@ -313,25 +313,6 @@
   text-wrap: balance;
   margin: 0 0 2px;
 }
-.tcBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-hi);
-  background: color-mix(in oklab, var(--accent), transparent 88%);
-  border: 1px solid color-mix(in oklab, var(--accent), transparent 70%);
-  padding: 4px 9px;
-  border-radius: 999px;
-}
-.tcBadgeGlyph {
-  font-size: 12px;
-}
-
 /* ---------- controls ---------- */
 .controls {
   position: absolute;
@@ -527,20 +508,6 @@
 }
 .statSep {
   color: var(--ink-faint);
-}
-/* journey shape — the hero of the stat strip, scales to any node count */
-.journeyShape {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 700;
-  color: var(--accent-hi);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.journeyGlyph {
-  font-size: 14px;
-  line-height: 1;
 }
 /* dominant fields crossed — fixed footprint via top-N dots + "+N more" */
 .fields {

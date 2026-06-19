@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPersistentCache } from "@/lib/explore/persistent-cache";
 
-// Session-level cache so the narrative survives BurrowCard unmount/remount and isn't
-// regenerated for a path already seen.
-const narrativeCache = new Map<string, string>();
+// localStorage-backed cache keyed by the path, so the narrative survives BurrowCard
+// unmount/remount AND a full page reload — the same path on this device never refetches.
+// (Cross-user reuse of the same path is handled server-side by the Redis cache in
+// lib/ai/narrative.ts, which keys by the same path.)
+const narrativeCache = createPersistentCache("warren:narrative:");
 
 /** Fetch + manage the semantic path narrative for the selected node's path. */
 export function usePathNarrative(focusedNodeId: string | null, path: string[]) {
