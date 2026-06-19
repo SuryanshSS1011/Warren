@@ -108,6 +108,26 @@ export async function getRelated(title: string): Promise<{ pages: PageSummary[] 
 
 export type BlueLink = { title: string };
 
+/** Live Wikipedia title search (opensearch) for the command palette — lets a user jump to
+    ANY article, not just the offline corpus. */
+export async function searchWikipedia(query: string, limit = 10): Promise<string[]> {
+  const params = new URLSearchParams({
+    action: "opensearch",
+    format: "json",
+    search: query,
+    limit: String(Math.min(limit, 20)),
+    namespace: "0",
+    origin: "*",
+  });
+  const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: 60 * 60 });
+  if (!res.ok) {
+    discard(res);
+    return [];
+  }
+  const data = (await res.json()) as [string, string[], string[], string[]];
+  return data[1] ?? [];
+}
+
 const CATEGORY_TTL = 60 * 60 * 24 * 30; // 30 days — an article's category is stable
 
 // Wikipedia maintenance/meta categories that aren't meaningful topic labels.
