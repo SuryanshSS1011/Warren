@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import styles from "@/app/explore.module.css";
-import { hueOf, labelOf } from "@/lib/explore/corpus";
+import { UNCATEGORIZED, hueOf, labelOf } from "@/lib/explore/corpus";
 import {
   type ResolvedArticle,
   isLiveId,
@@ -113,7 +113,7 @@ export default function BurrowCard({
     .map((id): Chip | null => {
       const r = resolve(id);
       if (r) return { id: r.id, title: r.title, category: r.category };
-      if (isLiveId(id)) return { id, title: wikiTitleFor(id), category: "Physics" };
+      if (isLiveId(id)) return { id, title: wikiTitleFor(id), category: UNCATEGORIZED };
       return null;
     })
     .filter(Boolean) as Chip[];

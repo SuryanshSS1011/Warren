@@ -12,20 +12,10 @@ const GOLD = "#e9b44c";
 const IVORY = "#f4efe3";
 const MUTED = "#a8a2bc";
 
-// oklch hue → a color Satori can render. Satori doesn't support oklch(), so the 6 curated
-// corpus hues map to exact swatches; any OTHER hue (live Wikipedia categories, which are
-// hashed to arbitrary hues) falls back to an hsl() approximation of the in-app oklch color
-// so live-node colors survive on the share card instead of collapsing to one default.
+// Satori can't render oklch(), so approximate the in-app oklch node color with hsl() from
+// the same hashed hue. One rule for every node — no category swatch table.
 function catColor(hue: number): string {
-  const table: Record<number, string> = {
-    256: "#8aa0ff", // Physics
-    72: "#e9b44c", // Food
-    26: "#ff8f6b", // History
-    330: "#ff8fc7", // Culture
-    150: "#5fd9c2", // Nature
-    296: "#c08bff", // Language
-  };
-  return table[hue] ?? `hsl(${hue}, 62%, 70%)`;
+  return `hsl(${hue}, 62%, 70%)`;
 }
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {

@@ -5,7 +5,7 @@ import { Command } from "cmdk";
 import * as Dialog from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import styles from "@/app/explore.module.css";
-import { ARTICLES, hueOf, labelOf } from "@/lib/explore/corpus";
+import { ARTICLES, hueOf } from "@/lib/explore/corpus";
 import { liveIdFor, upsertLive } from "@/lib/explore/article-store";
 
 type ArticlePaletteProps = {
@@ -65,7 +65,7 @@ export default function ArticlePalette({
   const q = query.trim().toLowerCase();
   const corpusMatches = q
     ? ARTICLES.filter((a) =>
-        `${a.title} ${labelOf(a.category)} ${a.blurb}`.toLowerCase().includes(q),
+        `${a.title} ${a.blurb}`.toLowerCase().includes(q),
       )
     : ARTICLES;
   const corpusTitles = new Set(ARTICLES.map((a) => a.title.toLowerCase()));
@@ -94,12 +94,12 @@ export default function ArticlePalette({
               {corpusMatches.length > 0 ? (
                 <Command.Group heading="Corpus">
                   {corpusMatches.map((a) => {
-                  const h = hueOf(a.category);
+                  const h = hueOf(a.title);
                   const inMap = present.has(a.id);
                   return (
                     <Command.Item
                       key={a.id}
-                      value={`${a.title} ${labelOf(a.category)} ${a.blurb}`}
+                      value={`${a.title} ${a.blurb}`}
                       className={styles.listItem}
                       onSelect={() => pick(a.id)}
                     >
@@ -110,7 +110,6 @@ export default function ArticlePalette({
                             style={{ background: `oklch(0.72 0.15 ${h})` }}
                           />
                           <span className={styles.listName}>{a.title}</span>
-                          <span className={styles.listCat}>{labelOf(a.category)}</span>
                           {inMap ? <span className={styles.listCat}>· in map</span> : null}
                         </span>
                         <p className={styles.listBridge} style={{ fontStyle: "normal" }}>
