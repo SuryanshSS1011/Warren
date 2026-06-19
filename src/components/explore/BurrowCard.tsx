@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import styles from "@/app/explore.module.css";
-import { UNCATEGORIZED, hueOf, labelOf } from "@/lib/explore/corpus";
+import { UNCATEGORIZED, hueOf, labelOf } from "@/lib/explore/hue";
 import {
   type ResolvedArticle,
   isLiveId,

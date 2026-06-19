@@ -3,7 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import styles from "@/app/explore.module.css";
-import { hueOf, labelOf } from "@/lib/explore/corpus";
+import { hueOf, labelOf } from "@/lib/explore/hue";
 import { placeholder, resolve } from "@/lib/explore/article-store";
 import type { GraphEdge } from "./types";
 

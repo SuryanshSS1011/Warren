@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
-import { hueOf, START_ID } from "@/lib/explore/corpus";
+import { hueOf } from "@/lib/explore/hue";
 import { liveIdFor, placeholder, resolve, upsertLive } from "@/lib/explore/article-store";
 import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
@@ -13,6 +13,7 @@ import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
 import BurrowCard from "./BurrowCard";
 import CanvasGraphEngine from "./CanvasGraphEngine";
+import ExploreHome from "./ExploreHome";
 import Starfield from "./Starfield";
 import WarrenList from "./WarrenList";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
@@ -65,13 +66,15 @@ export default function ExploreMap() {
   const [panMode, setPanMode] = useState(false);
 
   // ---- graph state ----
-  const [present, setPresent] = useState<Present[]>([{ id: START_ID, depth: 0 }]);
+  // A session starts EMPTY — the landing topic-picker seeds the first (live Wikipedia)
+  // node. There is no hardcoded corpus seed.
+  const [present, setPresent] = useState<Present[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
-  const [spineIds, setSpineIds] = useState<string[]>([START_ID]);
+  const [spineIds, setSpineIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [newestId, setNewestId] = useState<string | null>(START_ID);
+  const [newestId, setNewestId] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState<{ text: string; key: number } | null>(null);
-  const [elapsed, setElapsed] = useState(4);
+  const [elapsed, setElapsed] = useState(0);
   const [viewportW, setViewportW] = useState<number>(MOBILE_BP + 1);
   const [listOpen, setListOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -84,13 +87,15 @@ export default function ExploreMap() {
   const [, setHighlights] = useState<Record<string, string[]>>({});
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
-  const [startedAt] = useState(() => Date.now() - 4 * 60 * 1000);
+  const [startedAt] = useState(() => Date.now());
   const rootRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<GraphApi | null>(null);
-  const introDone = useRef(false);
   const subTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const presentIds = new Set(present.map((p) => p.id));
+
+  // resolve any node id to its display title (live cache, else the title baked into the id)
+  const titleOf = useCallback((id: string) => (resolve(id) ?? placeholder(id)).title, []);
 
   const nodes: GraphNode[] = present.map((p) => {
     const a = resolve(p.id) ?? placeholder(p.id);
@@ -134,7 +139,7 @@ export default function ExploreMap() {
   // ---- add a hop ----
   const addHop = useCallback(
     (fromId: string, toId: string, asSpine: boolean) => {
-      const bridge = bridgeFor(fromId, toId); // instant, canned — optimistic
+      const bridge = bridgeFor(fromId, toId, titleOf); // instant template — optimistic
       setPresent((prev) => {
         if (prev.find((p) => p.id === toId)) return prev;
         const fromDepth = (prev.find((p) => p.id === fromId) || { depth: 0 }).depth;
@@ -151,17 +156,17 @@ export default function ExploreMap() {
       flashSubtitle(bridge);
       // ARIA live announcement for screen readers (a11y plan: announce each new node).
       setAnnounce(`Added ${(resolve(toId) ?? placeholder(toId)).title}. ${bridge}`);
-      // then upgrade the canned bridge to the live AI sentence in the background
+      // then upgrade the template bridge to the live AI sentence in the background
       void refineBridge(fromId, toId, bridge);
     },
-    [flashSubtitle, refineBridge],
+    [flashSubtitle, refineBridge, titleOf],
   );
 
   // ---- chip click ----
   const handleChip = useCallback(
     (fromId: string, toId: string, visited: boolean) => {
       if (visited) {
-        const bridge = bridgeFor(fromId, toId);
+        const bridge = bridgeFor(fromId, toId, titleOf);
         setEdges((prev) =>
           prev.find((e) => e.source === fromId && e.target === toId)
             ? prev
@@ -175,7 +180,7 @@ export default function ExploreMap() {
       const isSpine = spineIds[spineIds.length - 1] === fromId;
       addHop(fromId, toId, isSpine);
     },
-    [spineIds, addHop, refineBridge],
+    [spineIds, addHop, refineBridge, titleOf],
   );
 
   const handleSelect = useCallback((id: string) => {
@@ -224,33 +229,14 @@ export default function ExploreMap() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // ---- intro autoplay: black-hole → spaghettification → pasta ----
-  useEffect(() => {
-    const seq: [string, string][] = [
-      ["black-hole", "spaghettification"],
-      ["spaghettification", "pasta"],
-    ];
-    let i = 0;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const step = () => {
-      if (introDone.current) return;
-      if (i >= seq.length) {
-        setSelectedId("pasta");
-        introDone.current = true;
-        return;
-      }
-      const [from, to] = seq[i++];
-      addHop(from, to, true);
-      timers.push(setTimeout(step, 1500));
-    };
-    timers.push(setTimeout(step, 900));
-    return () => timers.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // ---- seed the first node from a chosen Wikipedia topic (the landing picker) ----
+  const seedTopic = useCallback((title: string) => {
+    const id = upsertLive({ title }).id;
+    setPresent([{ id, depth: 0 }]);
+    setSpineIds([id]);
+    setNewestId(id);
+    setSelectedId(id);
   }, []);
-
-  const skipIntro = () => {
-    introDone.current = true;
-  };
 
   // elapsed timer
   useEffect(() => {
@@ -287,7 +273,7 @@ export default function ExploreMap() {
 
   // Canned title is instant; an AI title overlays it when available (keyed by first→last
   // so it re-fetches only when the journey's endpoints change). Falls back to canned.
-  const cannedTitle = titleFor(spineIds, (id) => (resolve(id) ?? placeholder(id)).title);
+  const cannedTitle = titleFor(spineIds, titleOf);
   const titleKey = spineIds.length >= 2 ? `${spineIds[0]}>${spineIds[spineIds.length - 1]}` : "";
   useEffect(() => {
     if (!titleKey) return;
@@ -465,8 +451,13 @@ export default function ExploreMap() {
   }, [saving, autoTitle, spineIds, nodes, edges, startedAt, hops, cats, elapsed, stars, flashToast]);
 
   return (
-    <div className={styles.root} ref={rootRef} onPointerDownCapture={skipIntro}>
+    <div className={styles.root} ref={rootRef}>
       <Starfield density={STARFIELD} />
+
+      {/* landing topic-picker until the session has a first node */}
+      <AnimatePresence>
+        {present.length === 0 ? <ExploreHome key="home" onPick={seedTopic} /> : null}
+      </AnimatePresence>
 
       <CanvasGraphEngine
         nodes={nodes}

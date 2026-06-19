@@ -4,7 +4,7 @@
 import "server-only";
 import { cache } from "react";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { UNCATEGORIZED } from "./corpus";
+import { UNCATEGORIZED } from "./hue";
 import {
   type SavedWarren,
   type WarrenSnapshot,

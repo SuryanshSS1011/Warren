@@ -8,7 +8,7 @@ import type {
   NodeObject,
 } from "react-force-graph-2d";
 import styles from "@/app/explore.module.css";
-import { hueOf, labelOf } from "@/lib/explore/corpus";
+import { hueOf, labelOf } from "@/lib/explore/hue";
 import { detailFor, LOD, type GraphEdge, type GraphEngineProps, type GraphNode } from "./types";
 
 // react-force-graph-2d is canvas/DOM only — it touches `window`/`document` at import time,
