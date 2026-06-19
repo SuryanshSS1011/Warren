@@ -5,7 +5,7 @@
 // This resolves the corpus-slug ↔ Wikipedia-title mismatch without special-casing the
 // graph: every node has an id, a title, a category, an extract, and a list of link ids.
 
-import { type Article, byId as corpusById } from "./corpus";
+import { type Article, UNCATEGORIZED, byId as corpusById } from "./corpus";
 
 export type ResolvedArticle = {
   id: string;
@@ -40,11 +40,6 @@ export function wikiTitleFor(id: string): string {
 // across renders without re-fetching; the component drives writes via upsertLive().
 const liveCache = new Map<string, ResolvedArticle>();
 
-// Live nodes derive their category from Wikipedia itself (see useLiveArticle →
-// /api/wiki/category). Until that resolves, fall back to a neutral label that still
-// hashes to a stable hue via hueOf().
-const DEFAULT_LIVE_CATEGORY = "Topic";
-
 export function upsertLive(article: {
   title: string;
   category?: string;
@@ -58,7 +53,7 @@ export function upsertLive(article: {
   const resolved: ResolvedArticle = {
     id,
     title: article.title,
-    category: article.category ?? existing?.category ?? DEFAULT_LIVE_CATEGORY,
+    category: article.category ?? existing?.category ?? UNCATEGORIZED,
     blurb: article.description ?? existing?.blurb ?? "",
     extract: article.extract ?? existing?.extract ?? "",
     links: article.links ?? existing?.links ?? [],
@@ -72,10 +67,13 @@ export function upsertLive(article: {
 }
 
 function fromCorpus(a: Article): ResolvedArticle {
+  // Corpus categories are NOT hardcoded — like live nodes, a corpus article's category is
+  // fetched from Wikipedia (keyed by its title in the live cache). Until then: UNCATEGORIZED.
+  const cachedCategory = liveCache.get(liveIdFor(a.title))?.category;
   return {
     id: a.id,
     title: a.title,
-    category: a.category,
+    category: cachedCategory ?? UNCATEGORIZED,
     blurb: a.blurb,
     extract: a.extract,
     links: a.links,
@@ -101,7 +99,7 @@ export function placeholder(id: string): ResolvedArticle {
   return {
     id,
     title,
-    category: DEFAULT_LIVE_CATEGORY,
+    category: UNCATEGORIZED,
     blurb: "",
     extract: "",
     links: [],

@@ -130,12 +130,19 @@ export async function searchWikipedia(query: string, limit = 10): Promise<string
 
 const CATEGORY_TTL = 60 * 60 * 24 * 30; // 30 days — an article's category is stable
 
-// Wikipedia maintenance/meta categories that aren't meaningful topic labels.
+// Wikipedia maintenance/meta categories — not meaningful topic labels.
 const META_CATEGORY =
   /^(Articles|All |Pages |Wikipedia|Webarchive|CS1|Use |Short description|Commons|Good articles|Featured|Coordinates|Hidden|Disambiguation|Redirects|Wikidata|Engvar|Dynamic lists|Vague|Use dmy|Use mdy)/i;
 
-/** The article's top "real" Wikipedia category — used to color live nodes by Wikipedia's
-    own taxonomy rather than a fixed enum. Returns the first non-hidden, non-meta category. */
+// Time/event-bucket categories ("5th-century disestablishments", "1452 births",
+// "Establishments in 80 AD") — real but useless as a topic color. Anything with a year,
+// "century", births/deaths, or (dis)establishments is dropped.
+const TIME_CATEGORY =
+  /(\b\d{3,4}\b|century|\bbirths?\b|\bdeaths?\b|(dis)?establishment|introduced in|introductions)/i;
+
+/** The article's best "topic" Wikipedia category for coloring. Filters maintenance + time
+    buckets, then prefers a concise, digit-free, general category over a noisy specific one
+    (shortest qualifying category by word count). Returns null if nothing usable. */
 export async function getArticleCategory(title: string): Promise<string | null> {
   return cached(`wiki:category:${title}`, CATEGORY_TTL, async () => {
     const params = new URLSearchParams({
@@ -144,7 +151,7 @@ export async function getArticleCategory(title: string): Promise<string | null> 
       prop: "categories",
       titles: title,
       clshow: "!hidden",
-      cllimit: "20",
+      cllimit: "30",
       redirects: "1",
       origin: "*",
     });
@@ -157,11 +164,15 @@ export async function getArticleCategory(title: string): Promise<string | null> 
       query?: { pages?: Record<string, { categories?: { title: string }[] }> };
     };
     const pages = data.query?.pages ?? {};
-    const cats = Object.values(pages)
+    const candidates = Object.values(pages)
       .flatMap((p) => p.categories ?? [])
       .map((c) => c.title.replace(/^Category:/, ""))
-      .filter((c) => !META_CATEGORY.test(c));
-    return cats[0] ?? null;
+      .filter((c) => c && !META_CATEGORY.test(c) && !TIME_CATEGORY.test(c) && !/\d/.test(c));
+    if (!candidates.length) return null;
+    // prefer the most general (fewest words); ties keep Wikipedia's order (earlier = closer
+    // to the lead, usually more central to the topic).
+    candidates.sort((a, b) => a.split(/\s+/).length - b.split(/\s+/).length);
+    return candidates[0];
   });
 }
 

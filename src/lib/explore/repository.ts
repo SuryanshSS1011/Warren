@@ -4,6 +4,7 @@
 import "server-only";
 import { cache } from "react";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { UNCATEGORIZED } from "./corpus";
 import {
   type SavedWarren,
   type WarrenSnapshot,
@@ -100,7 +101,7 @@ export const loadWarren = cache(async (id: string): Promise<SavedWarren | null> 
     nodes: (nodes ?? []).map((n) => ({
       id: n.id,
       title: n.title,
-      category: n.category ?? "Physics",
+      category: n.category ?? UNCATEGORIZED,
       depth: n.depth ?? 0,
     })),
     edges: (edges ?? []).map((e) => ({
@@ -146,7 +147,7 @@ export async function listPublicWarrens(limit = 24): Promise<WarrenCard[]> {
   for (const n of nodes ?? []) {
     nodeBy.set(`${n.warren_id}:${n.id}`, {
       title: n.title,
-      category: n.category ?? "Physics",
+      category: n.category ?? UNCATEGORIZED,
     });
   }
 
