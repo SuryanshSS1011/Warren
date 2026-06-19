@@ -497,6 +497,11 @@ export default function ExploreMap() {
     }
   }, [saving, buildSnapshot, flashToast]);
 
+  // The HUD (brand, controls, spine rail, stats) is meaningless on an empty session and
+  // would bleed through the translucent landing overlay — so render it only once a warren
+  // has begun. The landing picker owns the screen until then.
+  const hasWarren = present.length > 0;
+
   return (
     <div className={styles.root} ref={rootRef}>
       <Starfield density={STARFIELD} />
@@ -523,6 +528,9 @@ export default function ExploreMap() {
         onReady={handleReady}
       />
 
+      {/* HUD — only once a warren exists (hidden behind the landing picker otherwise) */}
+      {hasWarren ? (
+      <>
       {/* mobile-only backdrop behind the top HUD band so graph nodes that drift up there
           are occluded instead of bleeding through the controls/stats */}
       <div className={styles.hudScrim} aria-hidden="true" />
@@ -681,6 +689,8 @@ export default function ExploreMap() {
           </>
         ) : null}
       </div>
+      </>
+      ) : null}
 
       {/* connective-tissue subtitle */}
       <AnimatePresence mode="wait">
