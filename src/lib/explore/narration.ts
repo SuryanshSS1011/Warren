@@ -38,21 +38,3 @@ export function titleFor(
   return `The ${titleOf(first)} to ${titleOf(last)} Run`;
 }
 
-export type Badge = { name: string; glyph: string };
-
-/** Journey-shape badge from the spine + branch structure. */
-export function badgeFor(
-  spineIds: string[],
-  allNodeCount: number,
-): Badge | null {
-  const n = spineIds.length;
-  if (n < 2) return null;
-  const last = spineIds[n - 1];
-  const first = spineIds[0];
-  if (last === first && n > 2) return { name: "The Loop", glyph: "↺" };
-  const branchCount = allNodeCount - n;
-  if (branchCount >= 4) return { name: "The Big Bang", glyph: "✳" };
-  if (branchCount >= 2) return { name: "The Spiral", glyph: "✦" };
-  if (n >= 5) return { name: "The Straight Shot", glyph: "→" };
-  return { name: "The Burrow", glyph: "◦" };
-}

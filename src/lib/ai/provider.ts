@@ -7,9 +7,18 @@ export type GenerateArgs = {
   system: string;
   user: string;
   maxTokens?: number;
+  /** Low by default so a cache-miss regeneration (after TTL expiry) yields a stable,
+      near-deterministic result for the same input — bridges/titles/narratives shouldn't
+      drift between generations of the same content. */
+  temperature?: number;
 };
 
-export async function generateText({ system, user, maxTokens = 200 }: GenerateArgs) {
+export async function generateText({
+  system,
+  user,
+  maxTokens = 200,
+  temperature = 0.3,
+}: GenerateArgs) {
   // Validates the selected provider's key here (lazily) — keeps non-AI paths AI-free.
   const { AI_PROVIDER } = getAiEnv();
 
@@ -17,6 +26,7 @@ export async function generateText({ system, user, maxTokens = 200 }: GenerateAr
     const res = await getAnthropic().messages.create({
       model: getAnthropicModel(),
       max_tokens: maxTokens,
+      temperature,
       system,
       messages: [{ role: "user", content: user }],
     });
@@ -30,6 +40,7 @@ export async function generateText({ system, user, maxTokens = 200 }: GenerateAr
     config: {
       systemInstruction: system,
       maxOutputTokens: maxTokens,
+      temperature,
     },
   });
   return (res.text ?? "").trim();
