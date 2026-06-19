@@ -27,6 +27,9 @@ const ServerEnv = z.object({
   // Upstash Redis (optional). When unset, caching is a no-op so dev still works.
   UPSTASH_REDIS_REST_URL: z.string().min(1).optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+  // Shared secret the browser extension sends to POST /api/extension/hop. When unset, the
+  // extension write bridge is disabled (the endpoint returns 503).
+  WARREN_EXTENSION_TOKEN: z.string().min(1).optional(),
 });
 
 let cached: z.infer<typeof ServerEnv> | undefined;

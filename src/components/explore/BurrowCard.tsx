@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import styles from "@/app/explore.module.css";
-import { hueOf, labelOf } from "@/lib/explore/corpus";
+import { UNCATEGORIZED, hueOf, labelOf } from "@/lib/explore/corpus";
 import {
   type ResolvedArticle,
   isLiveId,
   resolve,
   wikiTitleFor,
 } from "@/lib/explore/article-store";
+import { usePathNarrative } from "@/hooks/usePathNarrative";
 import { useLiveArticle } from "./useLiveArticle";
 
 type BurrowCardProps = {
@@ -17,9 +18,20 @@ type BurrowCardProps = {
   presentIds: Set<string>;
   incomingBridge: string | null;
   accent: string;
+  /** Titles of the spine nodes up to (and including) the selected node. */
+  pathTitles: string[];
   onChip: (fromId: string, toId: string, visited: boolean) => void;
   onClose: () => void;
+  /** A blue-link inside the embedded Wikipedia reader was clicked. */
+  onHopTo?: (fromTitle: string, toTitle: string) => void;
+  /** The reader saved a text highlight for this node. */
+  onHighlight?: (nodeId: string, text: string) => void;
 };
+
+type WikiMessage =
+  | { type: "WIKI_HOP"; from: string; to: string }
+  | { type: "WIKI_HIGHLIGHT"; title: string; text: string }
+  | { type: "WIKI_PAGE_LOAD"; title: string };
 
 type Chip = { id: string; title: string; category: string };
 
@@ -30,9 +42,22 @@ export default function BurrowCard({
   presentIds,
   incomingBridge,
   accent,
+  pathTitles,
   onChip,
   onClose,
+  onHopTo,
+  onHighlight,
 }: BurrowCardProps) {
+  // Summary = AI bridge + extract + chips; Wikipedia = the live embedded reader.
+  const [tab, setTab] = useState<"summary" | "wikipedia">("summary");
+
+  // The semantic path narrative for the spine leading to this node.
+  const {
+    narrative,
+    isLoading: narrativeLoading,
+    error: narrativeError,
+  } = usePathNarrative(article.id, pathTitles);
+
   // The card centers itself vertically on desktop (translateY(-50%)) but docks as a
   // bottom sheet on mobile — so the enter/exit motion differs by breakpoint.
   const [isMobile, setIsMobile] = useState(false);
@@ -43,6 +68,31 @@ export default function BurrowCard({
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
+
+  // Listen for hops/highlights posted from the sandboxed Wikipedia reader. Because the
+  // iframe is sandboxed WITHOUT allow-same-origin, it runs in an opaque origin and its
+  // postMessage origin reports as "null" — so we accept "null" OR our own origin, and
+  // reject anything else.
+  const articleId = article.id;
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== "null" && event.origin !== window.location.origin) return;
+      const data = event.data as WikiMessage | undefined;
+      if (!data || typeof data !== "object") return;
+      // validate each field's shape — a malformed/spoofed message must not reach handlers
+      if (data.type === "WIKI_HOP") {
+        if (typeof data.from === "string" && typeof data.to === "string" && data.from && data.to) {
+          onHopTo?.(data.from, data.to);
+        }
+      } else if (data.type === "WIKI_HIGHLIGHT") {
+        if (typeof data.text === "string" && data.text.trim()) {
+          onHighlight?.(articleId, data.text);
+        }
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [articleId, onHopTo, onHighlight]);
 
   // Background-enrich with the live Wikipedia summary (real lead image, canonical extract)
   // and the in-article blue links. Falls back to whatever the article already carries.
@@ -63,7 +113,7 @@ export default function BurrowCard({
     .map((id): Chip | null => {
       const r = resolve(id);
       if (r) return { id: r.id, title: r.title, category: r.category };
-      if (isLiveId(id)) return { id, title: wikiTitleFor(id), category: "Physics" };
+      if (isLiveId(id)) return { id, title: wikiTitleFor(id), category: UNCATEGORIZED };
       return null;
     })
     .filter(Boolean) as Chip[];
@@ -110,6 +160,34 @@ export default function BurrowCard({
           {thumbSrc ? `Wikipedia · ${article.title}` : article.imgHint}
         </span>
       </div>
+      <div className={styles.burrowTabs} role="tablist" aria-label="Reading view">
+        <button
+          role="tab"
+          aria-selected={tab === "summary"}
+          className={`${styles.burrowTab} ${tab === "summary" ? styles.burrowTabActive : ""}`}
+          onClick={() => setTab("summary")}
+        >
+          Summary
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === "wikipedia"}
+          className={`${styles.burrowTab} ${tab === "wikipedia" ? styles.burrowTabActive : ""}`}
+          onClick={() => setTab("wikipedia")}
+        >
+          Wikipedia
+        </button>
+      </div>
+      {tab === "wikipedia" ? (
+        <div className={styles.burrowWiki}>
+          <iframe
+            className={styles.wikiFrame}
+            src={`/api/wiki/render?title=${encodeURIComponent(article.wikiTitle)}`}
+            title="Wikipedia"
+            sandbox="allow-scripts allow-popups"
+          />
+        </div>
+      ) : (
       <div className={styles.burrowScroll}>
         <div className={styles.burrowCat}>
           <span
@@ -130,6 +208,22 @@ export default function BurrowCard({
           </div>
         ) : null}
         <p className={styles.burrowExtract}>{extract}</p>
+        {pathTitles.length >= 2 ? (
+          <div className={styles.pathNarrative}>
+            <div className={styles.burrowLinksHead}>the thread so far</div>
+            {narrativeLoading ? (
+              <div className={styles.narrativeSkeleton} aria-hidden>
+                <div className={styles.skeletonLine} />
+                <div className={styles.skeletonLine} />
+                <div className={styles.skeletonLineShort} />
+              </div>
+            ) : narrativeError ? (
+              <p className={styles.narrativeError}>{narrativeError}</p>
+            ) : narrative ? (
+              <p className={styles.narrativeText}>{narrative}</p>
+            ) : null}
+          </div>
+        ) : null}
         <div className={styles.burrowLinksHead}>Burrow deeper</div>
         <div className={styles.burrowChips}>
           {chips.map((l) => {
@@ -157,6 +251,7 @@ export default function BurrowCard({
           })}
         </div>
       </div>
+      )}
     </motion.div>
   );
 }

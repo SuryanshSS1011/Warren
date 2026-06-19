@@ -1,10 +1,9 @@
-import type { CategoryName } from "@/lib/explore/corpus";
-
-/** A node as the graph renders it — derived from the live warren state. */
+/** A node as the graph renders it — derived from the live warren state. The category is a
+    string: a corpus enum value OR a live Wikipedia category (both hashed to a hue). */
 export type GraphNode = {
   id: string;
   depth: number;
-  category: CategoryName;
+  category: string;
   title: string;
 };
 
