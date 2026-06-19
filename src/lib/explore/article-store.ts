@@ -1,24 +1,22 @@
-// A unified, client-side article model that merges the offline corpus with live Wikipedia
-// articles fetched at runtime. The Explore graph references articles by a single `id`:
-//   - corpus articles keep their slug id ("black-hole")
-//   - live Wikipedia articles use a "live:" + title id ("live:Gravity well")
-// This resolves the corpus-slug ↔ Wikipedia-title mismatch without special-casing the
-// graph: every node has an id, a title, a category, an extract, and a list of link ids.
+// A client-side store for the live Wikipedia articles a session has touched. Every node in
+// the Explore graph is a live Wikipedia article, referenced by a "live:" + title id
+// ("live:Gravity well"). There is no offline corpus: titles, summaries, categories,
+// thumbnails, and links all come from Wikipedia at runtime (see lib/wikipedia/client.ts).
 
-import { type Article, UNCATEGORIZED, byId as corpusById } from "./corpus";
+import { UNCATEGORIZED } from "./hue";
 
 export type ResolvedArticle = {
   id: string;
   title: string;
-  /** corpus enum value OR a live Wikipedia category string (hashed to a hue) */
+  /** a live Wikipedia category string (hashed to a hue) */
   category: string;
   blurb: string;
   extract: string;
-  /** ids of articles you can burrow into (corpus slugs and/or live: ids) */
+  /** ids of articles you can burrow into (live: ids) */
   links: string[];
   imgHint: string;
   thumbnail?: string;
-  source: "corpus" | "live";
+  source: "live";
   /** the canonical Wikipedia title to fetch summary/links with */
   wikiTitle: string;
 };
@@ -30,10 +28,9 @@ export const isLiveId = (id: string) => id.startsWith(LIVE_PREFIX);
 /** Stable id for a live Wikipedia article from its title. */
 export const liveIdFor = (title: string) => `${LIVE_PREFIX}${title}`;
 
-/** The Wikipedia title an id maps to (corpus title for slugs, the bare title for live). */
+/** The Wikipedia title an id maps to (strips the live: prefix; ids are always live now). */
 export function wikiTitleFor(id: string): string {
-  if (isLiveId(id)) return id.slice(LIVE_PREFIX.length);
-  return corpusById[id]?.title ?? id;
+  return isLiveId(id) ? id.slice(LIVE_PREFIX.length) : id;
 }
 
 // Live articles fetched this session, keyed by their live: id. Module-level so it persists
@@ -66,28 +63,9 @@ export function upsertLive(article: {
   return resolved;
 }
 
-function fromCorpus(a: Article): ResolvedArticle {
-  // Corpus categories are NOT hardcoded — like live nodes, a corpus article's category is
-  // fetched from Wikipedia (keyed by its title in the live cache). Until then: UNCATEGORIZED.
-  const cachedCategory = liveCache.get(liveIdFor(a.title))?.category;
-  return {
-    id: a.id,
-    title: a.title,
-    category: cachedCategory ?? UNCATEGORIZED,
-    blurb: a.blurb,
-    extract: a.extract,
-    links: a.links,
-    imgHint: a.imgHint,
-    source: "corpus",
-    wikiTitle: a.title,
-  };
-}
-
-/** Resolve any id (corpus slug or live: id) to a unified article, if known. */
+/** Resolve a live id to a unified article, if we've fetched it this session. */
 export function resolve(id: string): ResolvedArticle | undefined {
-  if (isLiveId(id)) return liveCache.get(id);
-  const a = corpusById[id];
-  return a ? fromCorpus(a) : undefined;
+  return liveCache.get(id);
 }
 
 /** A lightweight placeholder for a live id we haven't fetched yet (so a freshly-spawned
