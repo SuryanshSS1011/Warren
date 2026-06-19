@@ -5,7 +5,7 @@ import { Command } from "cmdk";
 import * as Dialog from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import styles from "@/app/explore.module.css";
-import { ARTICLES, hueOf } from "@/lib/explore/corpus";
+import { hueOf, STARTER_TOPICS } from "@/lib/explore/hue";
 import { liveIdFor, upsertLive } from "@/lib/explore/article-store";
 
 type ArticlePaletteProps = {
@@ -15,8 +15,8 @@ type ArticlePaletteProps = {
   onPick: (id: string) => void;
 };
 
-/** ⌘K command palette. Searches the offline corpus AND live Wikipedia (debounced), so a
-    user can jump to / start from ANY article. Built on cmdk for keyboard nav. */
+/** ⌘K command palette. Searches all of Wikipedia (debounced). With an empty query it
+    offers a few starter topics so the list is never blank. Built on cmdk for keyboard nav. */
 export default function ArticlePalette({
   open,
   onOpenChange,
@@ -44,7 +44,7 @@ export default function ArticlePalette({
         const data = (await res.json()) as { results: string[] };
         if (!cancelled) setWikiResults(data.results ?? []);
       } catch {
-        /* ignore — corpus results still show */
+        /* ignore — starter topics still show */
       }
     }, 220);
     return () => {
@@ -54,22 +54,16 @@ export default function ArticlePalette({
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [query]);
 
-  const pick = (id: string) => {
-    onPick(id);
+  const pickTitle = (title: string) => {
+    upsertLive({ title });
+    onPick(liveIdFor(title));
     onOpenChange(false);
   };
 
-  // We filter both lists ourselves (cmdk's own filter would drop live results whose title
-  // doesn't lexically contain the query, e.g. "NYC" → "New York City"). Corpus: simple
-  // case-insensitive match over title/category/blurb. Live: already filtered by the API.
-  const q = query.trim().toLowerCase();
-  const corpusMatches = q
-    ? ARTICLES.filter((a) =>
-        `${a.title} ${a.blurb}`.toLowerCase().includes(q),
-      )
-    : ARTICLES;
-  const corpusTitles = new Set(ARTICLES.map((a) => a.title.toLowerCase()));
-  const liveOnly = wikiResults.filter((t) => !corpusTitles.has(t.toLowerCase()));
+  // Empty query → starter topics; otherwise the live Wikipedia results (already
+  // API-filtered, so we keep cmdk's own filter off and supply the rows directly).
+  const titles = query.trim().length >= 2 ? wikiResults : STARTER_TOPICS;
+  const heading = query.trim().length >= 2 ? "Wikipedia" : "Start anywhere";
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -77,13 +71,13 @@ export default function ArticlePalette({
         <Dialog.Overlay className={styles.overlay} />
         <Dialog.Content className={styles.panel} aria-describedby={undefined}>
           <VisuallyHidden>
-            <Dialog.Title>Find an article</Dialog.Title>
+            <Dialog.Title>Find a Wikipedia article</Dialog.Title>
           </VisuallyHidden>
-          {/* we filter both lists ourselves (see above), so disable cmdk's own filter */}
+          {/* results are API-filtered, so disable cmdk's own filter */}
           <Command label="Find an article" loop shouldFilter={false}>
             <Command.Input
               className={styles.cmdInput}
-              placeholder="Search the corpus or all of Wikipedia…"
+              placeholder="Search all of Wikipedia…"
               autoFocus
               value={query}
               onValueChange={setQuery}
@@ -91,54 +85,19 @@ export default function ArticlePalette({
             <Command.List className={styles.listScroll}>
               <Command.Empty className={styles.cmdEmpty}>No matching articles.</Command.Empty>
 
-              {corpusMatches.length > 0 ? (
-                <Command.Group heading="Corpus">
-                  {corpusMatches.map((a) => {
-                  const h = hueOf(a.title);
-                  const inMap = present.has(a.id);
-                  return (
-                    <Command.Item
-                      key={a.id}
-                      value={`${a.title} ${a.blurb}`}
-                      className={styles.listItem}
-                      onSelect={() => pick(a.id)}
-                    >
-                      <span className={styles.listBody}>
-                        <span className={styles.listRow}>
-                          <span
-                            className={styles.listDot}
-                            style={{ background: `oklch(0.72 0.15 ${h})` }}
-                          />
-                          <span className={styles.listName}>{a.title}</span>
-                          {inMap ? <span className={styles.listCat}>· in map</span> : null}
-                        </span>
-                        <p className={styles.listBridge} style={{ fontStyle: "normal" }}>
-                          {a.blurb}
-                        </p>
-                      </span>
-                    </Command.Item>
-                  );
-                })}
-                </Command.Group>
-              ) : null}
-
-              {liveOnly.length > 0 ? (
-                <Command.Group heading="Wikipedia">
-                  {liveOnly.map((title) => {
+              {titles.length > 0 ? (
+                <Command.Group heading={heading}>
+                  {titles.map((title) => {
                     const id = liveIdFor(title);
                     const h = hueOf(title);
                     const inMap = present.has(id);
                     return (
                       <Command.Item
                         key={id}
-                        // disable cmdk's own filtering for live items (already API-filtered)
                         value={`wiki-${title}`}
                         keywords={[title]}
                         className={styles.listItem}
-                        onSelect={() => {
-                          upsertLive({ title });
-                          pick(id);
-                        }}
+                        onSelect={() => pickTitle(title)}
                       >
                         <span className={styles.listBody}>
                           <span className={styles.listRow}>
@@ -147,7 +106,6 @@ export default function ArticlePalette({
                               style={{ background: `oklch(0.72 0.15 ${h})` }}
                             />
                             <span className={styles.listName}>{title}</span>
-                            <span className={styles.listCat}>Wikipedia</span>
                             {inMap ? <span className={styles.listCat}>· in map</span> : null}
                           </span>
                         </span>

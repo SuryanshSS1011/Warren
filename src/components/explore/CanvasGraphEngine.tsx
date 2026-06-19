@@ -8,7 +8,7 @@ import type {
   NodeObject,
 } from "react-force-graph-2d";
 import styles from "@/app/explore.module.css";
-import { hueOf, labelOf } from "@/lib/explore/corpus";
+import { hueOf, labelOf } from "@/lib/explore/hue";
 import { detailFor, LOD, type GraphEdge, type GraphEngineProps, type GraphNode } from "./types";
 
 // react-force-graph-2d is canvas/DOM only — it touches `window`/`document` at import time,
@@ -38,7 +38,12 @@ type NodeTileProps = {
   isSel: boolean;
   width: number;
   hue: number;
+  /** label always shown (spine/selected, or "all" mode) */
   labelOn: boolean;
+  /** context label whose visibility is gated by live zoom ("auto" mode) — rendered but
+   *  shown/hidden each frame by paintOverlay via a class, so it reacts to zoom without
+   *  a React re-render. */
+  gateLabel: boolean;
   /** "dot" collapses the tile to a small node at high node counts (level-of-detail) */
   detail: "tile" | "dot";
   accent: string;
@@ -71,11 +76,16 @@ function NodeTile({
   width,
   hue,
   labelOn,
+  gateLabel,
   detail,
   accent,
   registerPos,
   onActivate,
 }: NodeTileProps) {
+  // render the label whenever it's always-on OR a zoom-gated context label; the gated
+  // ones get the `labelGate` class so paintOverlay can show/hide them per frame.
+  const showLabel = labelOn || gateLabel;
+  const labelGateCls = gateLabel && !labelOn ? styles.labelGate : "";
   const innerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = innerRef.current;
@@ -98,7 +108,9 @@ function NodeTile({
           {...nodeA11y(node, isSel, onActivate)}
         >
           <span className={styles.nodeDotMark} style={{ background: `oklch(0.72 0.15 ${hue})` }} />
-          {labelOn ? <span className={styles.nodeDotLabel}>{node.title}</span> : null}
+          {showLabel ? (
+            <span className={`${styles.nodeDotLabel} ${labelGateCls}`}>{node.title}</span>
+          ) : null}
         </div>
       </div>
     );
@@ -142,7 +154,9 @@ function NodeTile({
             />
             {labelOf(node.category)}
           </div>
-          <div className={`${styles.title} ${labelOn ? "" : styles.muted}`}>
+          <div
+            className={`${styles.title} ${labelOn ? "" : showLabel ? labelGateCls : styles.muted}`}
+          >
             {node.title}
           </div>
         </div>
@@ -168,7 +182,7 @@ export default function CanvasGraphEngine(props: GraphEngineProps) {
     spineIds,
     newestId,
     accent,
-    showAllLabels,
+    labelMode,
     onSelect,
     onReady,
     dimmed,
@@ -334,6 +348,10 @@ export default function CanvasGraphEngine(props: GraphEngineProps) {
     const overlay = overlayRef.current;
     if (!fg || !overlay) return;
     const z = fg.zoom();
+    // "auto" label mode: reveal zoom-gated context labels once zoomed in past the reveal
+    // threshold. One class toggle on the overlay (CSS hides .labelGate when collapsed) —
+    // cheap, no per-node React work. "all"/"off" modes don't gate, so this is inert there.
+    overlay.classList.toggle(styles.labelsCollapsed, z < LOD.LABEL_REVEAL_ZOOM);
     const reg = nodeRegistry.current;
     posRefs.current.forEach((el, id) => {
       const node = reg.get(id);
@@ -537,11 +555,12 @@ export default function CanvasGraphEngine(props: GraphEngineProps) {
         {nodes.map((n) => {
           const onSpine = spineSet.has(n.id);
           const isSel = selectedId === n.id;
-          // Level-of-detail by node count (see types.ts LOD): collapse far nodes to dots,
-          // and force-hide non-spine labels once the graph is dense.
+          // Level-of-detail by node count (see types.ts LOD): collapse far nodes to dots.
           const detail = detailFor(nodes.length, { onSpine, isSelected: isSel });
-          const dense = nodes.length > LOD.FORCE_HIDE_LABELS_AT;
-          const labelOn = onSpine || isSel || (showAllLabels && !dense);
+          // Spine/selected are always labeled. Context labels: always in "all" mode, never
+          // in "off" mode, and zoom-gated in "auto" mode (shown/hidden by paintOverlay).
+          const labelOn = onSpine || isSel || labelMode === "all";
+          const gateLabel = !labelOn && labelMode === "auto";
           return (
             <NodeTile
               key={n.id}
@@ -551,6 +570,7 @@ export default function CanvasGraphEngine(props: GraphEngineProps) {
               width={sizeFor(n)}
               hue={hueOf(n.category)}
               labelOn={labelOn}
+              gateLabel={gateLabel}
               detail={detail}
               accent={accent}
               registerPos={(el) => {

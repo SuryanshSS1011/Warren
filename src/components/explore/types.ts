@@ -42,8 +42,11 @@ export type GraphEngineProps = {
   spineIds: string[];
   newestId: string | null;
   accent: string;
-  /** force every node's title label on (otherwise only spine/selected/hovered show) */
-  showAllLabels: boolean;
+  /** label visibility policy for CONTEXT nodes (spine/selected are always labeled):
+   *  - "auto": reveal as you zoom in (scales to any node count) — the default
+   *  - "all":  always show every label
+   *  - "off":  only spine/selected are labeled */
+  labelMode: "auto" | "all" | "off";
   /** dim non-spine context nodes (e.g. while a burrow card is open) */
   dimmed: boolean;
   /** when true, drag pans the canvas; when false (default), drag moves individual nodes */
@@ -66,8 +69,10 @@ export type GraphEngineProps = {
 export const LOD = {
   /** above this, only spine/selected nodes show full tiles; others collapse to dots */
   SIMPLIFY_TILES_AT: 60,
-  /** above this, hide all non-spine labels regardless of showAllLabels */
-  FORCE_HIDE_LABELS_AT: 120,
+  /** in "auto" label mode, context labels reveal once the camera zoom is at/above this
+   *  (zoom in to read names; zoom out for a clean overview). Replaces the old hard
+   *  node-count cutoff so labels scale with the view, not the graph size. */
+  LABEL_REVEAL_ZOOM: 0.9,
   /** above this, DOM tiles are past their comfort zone — prefer the canvas engine */
   CANVAS_RECOMMENDED_AT: 200,
 } as const;

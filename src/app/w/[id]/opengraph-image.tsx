@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { loadWarren } from "@/lib/explore/repository";
-import { hueOf } from "@/lib/explore/corpus";
+import { hueOf } from "@/lib/explore/hue";
 import { layoutTrail, smoothPath } from "@/lib/explore/trail";
 
 export const size = { width: 1200, height: 630 };

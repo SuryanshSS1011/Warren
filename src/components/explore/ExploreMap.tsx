@@ -4,15 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
-import { hueOf, START_ID } from "@/lib/explore/corpus";
+import { hueOf } from "@/lib/explore/hue";
 import { liveIdFor, placeholder, resolve, upsertLive } from "@/lib/explore/article-store";
-import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
+import { bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
+import { createPersistentCache } from "@/lib/explore/persistent-cache";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
 import BurrowCard from "./BurrowCard";
 import CanvasGraphEngine from "./CanvasGraphEngine";
+import ExploreHome from "./ExploreHome";
 import Starfield from "./Starfield";
 import WarrenList from "./WarrenList";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
@@ -23,6 +25,10 @@ const STARFIELD = 0.9;
 const MOBILE_BP = 880;
 
 type Present = { id: string; depth: number };
+
+// localStorage-backed AI-title cache, keyed by the journey's first→last endpoints, so the
+// same run never refetches its title on this device (the server caches it too).
+const titleCache = createPersistentCache("warren:title:");
 
 /** Brand mark — a trail that dips into the dark and lifts into a bright star. */
 function Logo() {
@@ -59,17 +65,21 @@ function Subtitle({ text }: { text: string }) {
 export default function ExploreMap() {
   // ---- tweakable display state ----
   const accent = ACCENT;
-  const [showAllLabels, setShowAllLabels] = useState(false);
+  // label policy for context nodes: "auto" reveals labels as you zoom in (default, scales),
+  // "all" forces every label on, "off" shows only spine/selected. The button cycles these.
+  const [labelMode, setLabelMode] = useState<"auto" | "all" | "off">("auto");
   const [panMode, setPanMode] = useState(false);
 
   // ---- graph state ----
-  const [present, setPresent] = useState<Present[]>([{ id: START_ID, depth: 0 }]);
+  // A session starts EMPTY — the landing topic-picker seeds the first (live Wikipedia)
+  // node. There is no hardcoded corpus seed.
+  const [present, setPresent] = useState<Present[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
-  const [spineIds, setSpineIds] = useState<string[]>([START_ID]);
+  const [spineIds, setSpineIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [newestId, setNewestId] = useState<string | null>(START_ID);
+  const [newestId, setNewestId] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState<{ text: string; key: number } | null>(null);
-  const [elapsed, setElapsed] = useState(4);
+  const [elapsed, setElapsed] = useState(0);
   const [viewportW, setViewportW] = useState<number>(MOBILE_BP + 1);
   const [listOpen, setListOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -82,13 +92,15 @@ export default function ExploreMap() {
   const [, setHighlights] = useState<Record<string, string[]>>({});
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
-  const [startedAt] = useState(() => Date.now() - 4 * 60 * 1000);
+  const [startedAt] = useState(() => Date.now());
   const rootRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<GraphApi | null>(null);
-  const introDone = useRef(false);
   const subTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const presentIds = new Set(present.map((p) => p.id));
+
+  // resolve any node id to its display title (live cache, else the title baked into the id)
+  const titleOf = useCallback((id: string) => (resolve(id) ?? placeholder(id)).title, []);
 
   const nodes: GraphNode[] = present.map((p) => {
     const a = resolve(p.id) ?? placeholder(p.id);
@@ -132,7 +144,7 @@ export default function ExploreMap() {
   // ---- add a hop ----
   const addHop = useCallback(
     (fromId: string, toId: string, asSpine: boolean) => {
-      const bridge = bridgeFor(fromId, toId); // instant, canned — optimistic
+      const bridge = bridgeFor(fromId, toId, titleOf); // instant template — optimistic
       setPresent((prev) => {
         if (prev.find((p) => p.id === toId)) return prev;
         const fromDepth = (prev.find((p) => p.id === fromId) || { depth: 0 }).depth;
@@ -149,17 +161,17 @@ export default function ExploreMap() {
       flashSubtitle(bridge);
       // ARIA live announcement for screen readers (a11y plan: announce each new node).
       setAnnounce(`Added ${(resolve(toId) ?? placeholder(toId)).title}. ${bridge}`);
-      // then upgrade the canned bridge to the live AI sentence in the background
+      // then upgrade the template bridge to the live AI sentence in the background
       void refineBridge(fromId, toId, bridge);
     },
-    [flashSubtitle, refineBridge],
+    [flashSubtitle, refineBridge, titleOf],
   );
 
   // ---- chip click ----
   const handleChip = useCallback(
     (fromId: string, toId: string, visited: boolean) => {
       if (visited) {
-        const bridge = bridgeFor(fromId, toId);
+        const bridge = bridgeFor(fromId, toId, titleOf);
         setEdges((prev) =>
           prev.find((e) => e.source === fromId && e.target === toId)
             ? prev
@@ -173,7 +185,7 @@ export default function ExploreMap() {
       const isSpine = spineIds[spineIds.length - 1] === fromId;
       addHop(fromId, toId, isSpine);
     },
-    [spineIds, addHop, refineBridge],
+    [spineIds, addHop, refineBridge, titleOf],
   );
 
   const handleSelect = useCallback((id: string) => {
@@ -222,33 +234,14 @@ export default function ExploreMap() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // ---- intro autoplay: black-hole → spaghettification → pasta ----
-  useEffect(() => {
-    const seq: [string, string][] = [
-      ["black-hole", "spaghettification"],
-      ["spaghettification", "pasta"],
-    ];
-    let i = 0;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const step = () => {
-      if (introDone.current) return;
-      if (i >= seq.length) {
-        setSelectedId("pasta");
-        introDone.current = true;
-        return;
-      }
-      const [from, to] = seq[i++];
-      addHop(from, to, true);
-      timers.push(setTimeout(step, 1500));
-    };
-    timers.push(setTimeout(step, 900));
-    return () => timers.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // ---- seed the first node from a chosen Wikipedia topic (the landing picker) ----
+  const seedTopic = useCallback((title: string) => {
+    const id = upsertLive({ title }).id;
+    setPresent([{ id, depth: 0 }]);
+    setSpineIds([id]);
+    setNewestId(id);
+    setSelectedId(id);
   }, []);
-
-  const skipIntro = () => {
-    introDone.current = true;
-  };
 
   // elapsed timer
   useEffect(() => {
@@ -283,27 +276,39 @@ export default function ExploreMap() {
     return cut.map((id) => (resolve(id) ?? placeholder(id)).title);
   })();
 
-  // Canned title is instant; an AI title overlays it when available (keyed by first→last
-  // so it re-fetches only when the journey's endpoints change). Falls back to canned.
-  const cannedTitle = titleFor(spineIds, (id) => (resolve(id) ?? placeholder(id)).title);
+  // Template title is instant; an AI title overlays it when available (keyed by first→last
+  // so it re-fetches only when the journey's endpoints change). The AI title is persisted
+  // to localStorage by that key, so the same endpoints on this device never refetch; the
+  // server (Redis) also caches by the same key so a different user's same run is a hit too.
+  const cannedTitle = titleFor(spineIds, titleOf);
   const titleKey = spineIds.length >= 2 ? `${spineIds[0]}>${spineIds[spineIds.length - 1]}` : "";
   useEffect(() => {
+    // Seeding aiTitles synchronously from the persistent cache is intentional (a known
+    // title shows instantly, no fetch) — not a cascading update, so scope-disable the rule.
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (!titleKey) return;
+    const cached = titleCache.get(titleKey);
+    if (cached) {
+      setAiTitles((m) => (m[titleKey] === cached ? m : { ...m, [titleKey]: cached }));
+      return;
+    }
     let cancelled = false;
     const titles = spineIds.map((id) => resolve(id)?.title).filter(Boolean) as string[];
     fetchTitle(titles)
       .then((t) => {
-        if (!cancelled && t) setAiTitles((m) => ({ ...m, [titleKey]: t }));
+        if (cancelled || !t) return;
+        titleCache.set(titleKey, t);
+        setAiTitles((m) => ({ ...m, [titleKey]: t }));
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
+    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [titleKey]);
   const autoTitle = (titleKey && aiTitles[titleKey]) || cannedTitle;
 
-  const badge = badgeFor(spineIds, nodes.length);
   const hops = Math.max(0, spineIds.length - 1);
   const cats = new Set(nodes.map((n) => n.category)).size;
   const maxDepth = nodes.reduce((m, n) => Math.max(m, n.depth), 0);
@@ -417,10 +422,9 @@ export default function ExploreMap() {
     return () => es.close();
   }, []);
 
-  const handleShare = useCallback(async () => {
-    if (saving) return;
-    setSaving(true);
-    const snapshot: WarrenSnapshot = {
+  // Build the serializable snapshot of the current map (shared by Share + autosave).
+  const buildSnapshot = useCallback(
+    (): WarrenSnapshot => ({
       title: autoTitle,
       spine: spineIds,
       nodes: nodes.map((n) => ({
@@ -432,7 +436,38 @@ export default function ExploreMap() {
       edges,
       startedAt,
       stats: { hops, categories: cats, minutes: elapsed, stars },
-    };
+    }),
+    [autoTitle, spineIds, nodes, edges, startedAt, hops, cats, elapsed, stars],
+  );
+
+  // ---- autosave: every session is a warren. Once the map has a real path (≥2 nodes), we
+  // upsert it (debounced) to a stable row so it shows up in the Super Warren meta-graph
+  // without a manual Share. No-ops (503) when Supabase isn't configured. ----
+  const warrenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (nodes.length < 2) return;
+    const snapshot = buildSnapshot();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/warren", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: warrenIdRef.current ?? undefined, snapshot }),
+        });
+        if (!res.ok) return; // 503 unconfigured / transient — stay silent, retry next change
+        const data = (await res.json()) as { id?: string };
+        if (data.id) warrenIdRef.current = data.id;
+      } catch {
+        /* offline — autosave is best-effort */
+      }
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [buildSnapshot, nodes.length]);
+
+  const handleShare = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    const snapshot = buildSnapshot();
     try {
       const res = await fetch("/api/warren", {
         method: "POST",
@@ -460,11 +495,16 @@ export default function ExploreMap() {
     } finally {
       setSaving(false);
     }
-  }, [saving, autoTitle, spineIds, nodes, edges, startedAt, hops, cats, elapsed, stars, flashToast]);
+  }, [saving, buildSnapshot, flashToast]);
 
   return (
-    <div className={styles.root} ref={rootRef} onPointerDownCapture={skipIntro}>
+    <div className={styles.root} ref={rootRef}>
       <Starfield density={STARFIELD} />
+
+      {/* landing topic-picker until the session has a first node */}
+      <AnimatePresence>
+        {present.length === 0 ? <ExploreHome key="home" onPick={seedTopic} /> : null}
+      </AnimatePresence>
 
       <CanvasGraphEngine
         nodes={nodes}
@@ -473,7 +513,7 @@ export default function ExploreMap() {
         spineIds={spineIds}
         newestId={newestId}
         accent={accent}
-        showAllLabels={showAllLabels}
+        labelMode={labelMode}
         dimmed={!!selArticle}
         panMode={panMode}
         reserveRight={reserveRight}
@@ -499,12 +539,6 @@ export default function ExploreMap() {
         <div className={styles.titlecard}>
           <div className={styles.tcLabel}>your warren</div>
           <div className={styles.tcTitle}>{autoTitle}</div>
-          {badge ? (
-            <div className={styles.tcBadge}>
-              <span className={styles.tcBadgeGlyph}>{badge.glyph}</span>
-              {badge.name}
-            </div>
-          ) : null}
         </div>
       </header>
 
@@ -550,10 +584,19 @@ export default function ExploreMap() {
           ✥ Pan
         </button>
         <button
-          className={`${styles.ctl} ${showAllLabels ? styles.on : ""}`}
-          onClick={() => setShowAllLabels((v) => !v)}
+          className={`${styles.ctl} ${labelMode !== "auto" ? styles.on : ""}`}
+          onClick={() =>
+            setLabelMode((m) => (m === "auto" ? "all" : m === "all" ? "off" : "auto"))
+          }
+          title={
+            labelMode === "auto"
+              ? "Labels: Auto — names reveal as you zoom in"
+              : labelMode === "all"
+                ? "Labels: All — every name shown"
+                : "Labels: Off — only your path is named"
+          }
         >
-          Labels
+          Labels: {labelMode === "auto" ? "Auto" : labelMode === "all" ? "All" : "Off"}
         </button>
         <button className={styles.ctl} onClick={() => setListOpen(true)}>
           ☰ List
@@ -569,6 +612,9 @@ export default function ExploreMap() {
         </button>
         <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
           ◫ Gallery
+        </Link>
+        <Link className={styles.ctl} href="/super" style={{ textDecoration: "none" }}>
+          ✦ Super Warren
         </Link>
       </div>
 
@@ -608,14 +654,6 @@ export default function ExploreMap() {
 
       {/* stat strip */}
       <div className={styles.statStrip}>
-        {/* journey shape — the one summary that abstracts any node count into a glyph */}
-        {badge ? (
-          <div className={styles.journeyShape}>
-            <span className={styles.journeyGlyph}>{badge.glyph}</span>
-            {badge.name}
-          </div>
-        ) : null}
-        <span className={styles.statSep}>·</span>
         <div className={styles.stat}>
           <b>{hops}</b> hops
         </div>
