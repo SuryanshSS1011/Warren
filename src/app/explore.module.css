@@ -461,22 +461,36 @@
 .statSep {
   color: var(--ink-faint);
 }
-.statDive {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.stars {
+/* journey shape — the hero of the stat strip, scales to any node count */
+.journeyShape {
   display: inline-flex;
-  gap: 1px;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--accent-hi);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.star {
-  color: rgba(244, 239, 227, 0.16);
-  font-size: 12px;
+.journeyGlyph {
+  font-size: 14px;
+  line-height: 1;
 }
-.starOn {
-  color: var(--accent);
-  text-shadow: 0 0 8px color-mix(in oklab, var(--accent), transparent 55%);
+/* dominant fields crossed — fixed footprint via top-N dots + "+N more" */
+.fields {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.fieldDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.fieldMore {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  margin-left: 2px;
 }
 
 /* ---------- subtitle ---------- */

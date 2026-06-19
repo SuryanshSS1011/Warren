@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
@@ -308,6 +308,16 @@ export default function ExploreMap() {
   const maxDepth = nodes.reduce((m, n) => Math.max(m, n.depth), 0);
   const stars = Math.min(5, Math.max(1, maxDepth + 1));
 
+  // Journey SUMMARY that stays a fixed size at any node count (4 nodes or 400): the
+  // dominant categories you've crossed, ranked by frequency, capped with a "+N more".
+  const topCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of nodes) counts.set(n.category, (counts.get(n.category) ?? 0) + 1);
+    const ranked = [...counts.keys()].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+    return { top: ranked.slice(0, 4), more: Math.max(0, ranked.length - 4) };
+  }, [nodes]);
+  const deepestPath = maxDepth + 1; // longest chain length (nodes), not abstract stars
+
   const isMobile = viewportW < MOBILE_BP;
   const reserveRight = selArticle && !isMobile ? 412 : 0;
   // On mobile, keep the graph framed below the top HUD band (brand + controls + stats)
@@ -555,28 +565,40 @@ export default function ExploreMap() {
 
       {/* stat strip */}
       <div className={styles.statStrip}>
+        {/* journey shape — the one summary that abstracts any node count into a glyph */}
+        {badge ? (
+          <div className={styles.journeyShape}>
+            <span className={styles.journeyGlyph}>{badge.glyph}</span>
+            {badge.name}
+          </div>
+        ) : null}
+        <span className={styles.statSep}>·</span>
         <div className={styles.stat}>
           <b>{hops}</b> hops
         </div>
         <span className={styles.statSep}>·</span>
         <div className={styles.stat}>
-          <b>{cats}</b> categories
+          deepest path <b>{deepestPath}</b>
         </div>
-        <span className={styles.statSep}>·</span>
-        <div className={styles.stat}>
-          <b>{elapsed}</b> min
-        </div>
-        <span className={styles.statSep}>·</span>
-        <div className={styles.statDive}>
-          deepest dive
-          <span className={styles.stars}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <span key={i} className={`${styles.star} ${i < stars ? styles.starOn : ""}`}>
-                ★
-              </span>
-            ))}
-          </span>
-        </div>
+        {topCategories.top.length > 0 ? (
+          <>
+            <span className={styles.statSep}>·</span>
+            {/* dominant fields crossed — fixed width via top-N + "+N", scales to 100s */}
+            <div className={styles.fields}>
+              {topCategories.top.map((c) => (
+                <span
+                  key={c}
+                  className={styles.fieldDot}
+                  style={{ background: `oklch(0.72 0.15 ${hueOf(c)})` }}
+                  title={c}
+                />
+              ))}
+              {topCategories.more > 0 ? (
+                <span className={styles.fieldMore}>+{topCategories.more}</span>
+              ) : null}
+            </div>
+          </>
+        ) : null}
       </div>
 
       {/* connective-tissue subtitle */}
