@@ -19,6 +19,10 @@ export type GraphEdge = {
 export type GraphApi = {
   fitToView: () => void;
   focus: (id: string) => void;
+  /** zoom by a multiplicative factor about the viewport center (e.g. 1.3 in, 0.77 out) */
+  zoomBy: (factor: number) => void;
+  /** re-center the view on the newest/selected node at a comfortable zoom */
+  recenter: () => void;
 };
 
 /**

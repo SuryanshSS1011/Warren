@@ -499,6 +499,31 @@ export default function ExploreMap() {
         role="toolbar"
         aria-label="Map controls"
       >
+        {/* zoom cluster: −  ⌖ recenter  +  ⤢ fit — discoverable, beyond wheel/pinch */}
+        <div className={styles.zoomCluster}>
+          <button
+            className={styles.zoomBtn}
+            aria-label="Zoom out"
+            onClick={() => apiRef.current?.zoomBy(1 / 1.3)}
+          >
+            −
+          </button>
+          <button
+            className={styles.zoomBtn}
+            aria-label="Recenter"
+            title="Recenter"
+            onClick={() => apiRef.current?.recenter()}
+          >
+            ⌖
+          </button>
+          <button
+            className={styles.zoomBtn}
+            aria-label="Zoom in"
+            onClick={() => apiRef.current?.zoomBy(1.3)}
+          >
+            +
+          </button>
+        </div>
         <button className={styles.ctl} onClick={() => apiRef.current?.fitToView()}>
           ⤢ Fit
         </button>
