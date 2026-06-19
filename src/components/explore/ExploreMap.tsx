@@ -17,8 +17,8 @@ import Starfield from "./Starfield";
 import WarrenList from "./WarrenList";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
 
-const DEFAULT_ACCENT = "#e9b44c"; // antique gold (Star Chart spine)
-const ACCENT_SWATCHES = ["#e9b44c", "#8aa0ff", "#b58cff", "#5fd9c2", "#ff8fab"];
+// The spine/edge accent is fixed antique gold — the Star Chart identity (no color picker).
+const ACCENT = "#e9b44c";
 const STARFIELD = 0.9;
 const MOBILE_BP = 880;
 
@@ -58,7 +58,7 @@ function Subtitle({ text }: { text: string }) {
 
 export default function ExploreMap() {
   // ---- tweakable display state ----
-  const [accent, setAccent] = useState(DEFAULT_ACCENT);
+  const accent = ACCENT;
   const [showAllLabels, setShowAllLabels] = useState(false);
 
   // ---- graph state ----
@@ -523,19 +523,6 @@ export default function ExploreMap() {
         <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
           ◫ Gallery
         </Link>
-        {ACCENT_SWATCHES.map((c) => (
-          <button
-            key={c}
-            className={styles.swatch}
-            aria-label={`Accent ${c}`}
-            aria-pressed={accent === c}
-            onClick={() => setAccent(c)}
-            style={{
-              background: c,
-              borderColor: accent === c ? "var(--ink)" : "var(--line)",
-            }}
-          />
-        ))}
         <span className={styles.ctlHint}>drag to pan · scroll to zoom</span>
       </div>
 
