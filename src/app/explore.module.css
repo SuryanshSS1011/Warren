@@ -420,9 +420,11 @@
   z-index: 10;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0 2px;
   max-width: min(62vw, 720px);
+  height: 30px;
+  overflow: hidden;
 }
 .spineLink {
   width: 16px;
@@ -469,6 +471,22 @@
   height: 6px;
   border-radius: 50%;
   flex: none;
+}
+/* collapsed-middle marker: "+N" hidden steps between origin and recent path */
+.spineGap {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .statStrip {
