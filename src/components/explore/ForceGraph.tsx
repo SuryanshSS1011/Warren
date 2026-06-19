@@ -26,7 +26,24 @@ type NodeTileProps = {
   accent: string;
   registerPos: (el: HTMLDivElement | null) => void;
   onDown: (ev: ReactPointerEvent) => void;
+  onActivate: () => void;
 };
+
+// Shared a11y attributes that make a node tile a real, keyboard-operable button.
+function nodeA11y(node: GraphNode, isSel: boolean, onActivate: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    "aria-label": `${node.title}. ${node.category}.`,
+    "aria-pressed": isSel,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onActivate();
+      }
+    },
+  };
+}
 
 /* A single article tile. Plays its birth animation on mount, then strips the class so a
    frozen-timeline environment still lands on the visible base state. */
@@ -41,6 +58,7 @@ function NodeTile({
   accent,
   registerPos,
   onDown,
+  onActivate,
 }: NodeTileProps) {
   const innerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -61,6 +79,7 @@ function NodeTile({
           className={`${styles.nodeDot} ${onSpine ? styles.spine : styles.context}`}
           title={node.title}
           style={{ "--cat-h": hue, "--accent": accent } as React.CSSProperties}
+          {...nodeA11y(node, isSel, onActivate)}
         >
           <span className={styles.nodeDotMark} style={{ background: `oklch(0.72 0.15 ${hue})` }} />
           {labelOn ? <span className={styles.nodeDotLabel}>{node.title}</span> : null}
@@ -93,6 +112,7 @@ function NodeTile({
               : `oklch(0.7 0.06 ${hue} / 0.22)`,
           } as React.CSSProperties
         }
+        {...nodeA11y(node, isSel, onActivate)}
       >
         <div
           className={styles.thumb}
@@ -166,6 +186,9 @@ export default function ForceGraph(props: ForceGraphProps) {
   const cam = useRef<Camera>({ x: 0, y: 0, zoom: 1, tx: 0, ty: 0, tzoom: 1 });
   const alpha = useRef(1);
   const drag = useRef<DragState>(null);
+  // active pointers (for multi-touch pinch-zoom) + the in-progress pinch gesture
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; midX: number; midY: number } | null>(null);
   const particles = useRef<{ key: string; els: SVGCircleElement[]; from: string; to: string }[]>(
     [],
   );
@@ -302,8 +325,9 @@ export default function ForceGraph(props: ForceGraphProps) {
     c.tzoom = opts?.zoom || Math.min(1.15, Math.max(c.zoom, 0.95));
     const rr = propsRef.current.reserveRight || 0;
     const rb = propsRef.current.reserveBottom || 0;
+    const rt = propsRef.current.reserveTop || 0;
     c.tx = (w - rr) / 2 - p.x * c.tzoom;
-    c.ty = (h - rb) / 2 - p.y * c.tzoom;
+    c.ty = rt + (h - rt - rb) / 2 - p.y * c.tzoom;
   }
 
   function fitToView() {
@@ -324,8 +348,9 @@ export default function ForceGraph(props: ForceGraphProps) {
     const h = vp ? vp.clientHeight : 800;
     const rr = propsRef.current.reserveRight || 0;
     const rb = propsRef.current.reserveBottom || 0;
+    const rt = propsRef.current.reserveTop || 0;
     const availW = w - rr;
-    const availH = h - rb;
+    const availH = h - rt - rb;
     const pad = 220;
     const bw = maxX - minX + pad;
     const bh = maxY - minY + pad;
@@ -333,7 +358,7 @@ export default function ForceGraph(props: ForceGraphProps) {
     const c = cam.current;
     c.tzoom = z;
     c.tx = availW / 2 - ((minX + maxX) / 2) * z;
-    c.ty = availH / 2 - ((minY + maxY) / 2) * z;
+    c.ty = rt + availH / 2 - ((minY + maxY) / 2) * z;
   }
 
   // ---- render frame ----
@@ -488,7 +513,46 @@ export default function ForceGraph(props: ForceGraphProps) {
     return { x: (cx - vp.left - c.x) / c.zoom, y: (cy - vp.top - c.y) / c.zoom };
   }
 
+  // ---- zoom around a screen point (shared by wheel + pinch) ----
+  function zoomAt(screenX: number, screenY: number, factor: number) {
+    const c = cam.current;
+    const nz = Math.min(2.4, Math.max(0.3, c.tzoom * factor));
+    const vp = viewportRef.current!.getBoundingClientRect();
+    const mx = screenX - vp.left;
+    const my = screenY - vp.top;
+    c.tx = mx - (mx - c.tx) * (nz / c.tzoom);
+    c.ty = my - (my - c.ty) * (nz / c.tzoom);
+    c.zoom += (nz - c.zoom) * 0; // leave lerp to paint()
+    c.tzoom = nz;
+  }
+
   function onPointerMove(ev: PointerEvent) {
+    // keep the live position for any tracked pointer (used by pinch)
+    if (pointers.current.has(ev.pointerId)) {
+      pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    }
+
+    // two fingers down → pinch-zoom around the midpoint (overrides pan)
+    if (pointers.current.size >= 2) {
+      const pts = Array.from(pointers.current.values());
+      const [a, b] = pts;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      const pp = pinch.current;
+      if (pp) {
+        zoomAt(midX, midY, dist / pp.dist);
+        // also pan to follow the midpoint so the gesture feels anchored
+        cam.current.tx += midX - pp.midX;
+        cam.current.ty += midY - pp.midY;
+        cam.current.x = cam.current.tx;
+        cam.current.y = cam.current.ty;
+      }
+      pinch.current = { dist, midX, midY };
+      if (drag.current) drag.current.moved = true;
+      return;
+    }
+
     const d = drag.current;
     if (!d) return;
     const dist = Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy);
@@ -509,7 +573,10 @@ export default function ForceGraph(props: ForceGraphProps) {
     }
   }
 
-  function onPointerUp() {
+  function onPointerUp(ev: PointerEvent) {
+    pointers.current.delete(ev.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
+    if (pointers.current.size > 0) return; // still mid-gesture
     const d = drag.current;
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", onPointerUp);
@@ -525,8 +592,15 @@ export default function ForceGraph(props: ForceGraphProps) {
     drag.current = null;
   }
 
+  function trackPointer(ev: ReactPointerEvent) {
+    pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
   function onPointerDownBg(ev: ReactPointerEvent) {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 && ev.pointerType === "mouse") return;
+    trackPointer(ev);
     drag.current = {
       mode: "pan",
       sx: ev.clientX,
@@ -535,29 +609,18 @@ export default function ForceGraph(props: ForceGraphProps) {
       oy: cam.current.ty,
       moved: false,
     };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
   }
 
   function onPointerDownNode(ev: ReactPointerEvent, id: string) {
     ev.stopPropagation();
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 && ev.pointerType === "mouse") return;
+    trackPointer(ev);
     drag.current = { mode: "node", id, sx: ev.clientX, sy: ev.clientY, moved: false };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
   }
 
   function onWheel(ev: WheelEvent) {
     ev.preventDefault();
-    const c = cam.current;
-    const factor = Math.exp(-ev.deltaY * 0.0014);
-    const nz = Math.min(2.2, Math.max(0.35, c.tzoom * factor));
-    const vp = viewportRef.current!.getBoundingClientRect();
-    const mx = ev.clientX - vp.left;
-    const my = ev.clientY - vp.top;
-    c.tx = mx - (mx - c.tx) * (nz / c.tzoom);
-    c.ty = my - (my - c.ty) * (nz / c.tzoom);
-    c.tzoom = nz;
+    zoomAt(ev.clientX, ev.clientY, Math.exp(-ev.deltaY * 0.0014));
   }
 
   useEffect(() => {
@@ -565,7 +628,7 @@ export default function ForceGraph(props: ForceGraphProps) {
     if (!vp) return;
     vp.addEventListener("wheel", onWheel, { passive: false });
     return () => vp.removeEventListener("wheel", onWheel);
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // depth → size
@@ -624,6 +687,10 @@ export default function ForceGraph(props: ForceGraphProps) {
                 else posRefs.current.delete(n.id);
               }}
               onDown={(ev) => onPointerDownNode(ev, n.id)}
+              onActivate={() => {
+                onSelect(n.id);
+                gotoFocus(n.id);
+              }}
             />
           );
         })}

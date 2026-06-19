@@ -111,41 +111,96 @@ export type BlueLink = { title: string };
 // Namespaces that are not real articles (File:, Help:, Category:, etc.).
 const NON_ARTICLE_PREFIX = /^(File|Image|Help|Category|Template|Wikipedia|Portal|Special|Talk|User|Module|Draft|MediaWiki):/i;
 
-/** The clickable in-article "blue links" — the next jumps a reader can burrow into.
-    Uses the Action API `links` generator (main namespace only) and filters house-keeping. */
+// Low-value "burrow deeper" targets: corporate entities, list/index pages, year/number
+// stubs, and language/format housekeeping that clutter the in-article link dump.
+const LOW_VALUE_TITLE =
+  /(\b(Inc|Ltd|LLC|GmbH|Co|Corporation|Company)\b\.?$)|(\bS\.p\.A\.?$)|(^(List|Index|Outline|Timeline|History|Glossary) of )|(\((company|disambiguation)\))|(^\d{3,4}$)|(^[A-Z]+ \d)|(English$)/i;
+
+/** The next jumps a reader can burrow into, ranked by CONCEPTUAL RELEVANCE — what's
+    actually related to the topic, not what's merely popular or alphabetically first:
+      1. `morelike:` search — Wikipedia's own content-similarity ranking (the strong signal:
+         e.g. Black hole → Schwarzschild radius, Event horizon, Gravitational collapse),
+      2. in-article links the summary extract mentions (the lead-section on-ramps),
+      3. remaining in-article links, as a last-resort top-up.
+    Main namespace only, house-keeping + low-value stubs filtered. */
 export async function getArticleLinks(title: string, limit = 40): Promise<BlueLink[]> {
   return cached(`wiki:links:${title}:${limit}`, LINKS_TTL, async () => {
-    const params = new URLSearchParams({
-      action: "query",
-      format: "json",
-      prop: "links",
-      titles: title,
-      plnamespace: "0", // main article namespace only
-      pllimit: String(Math.min(limit, 500)),
-      redirects: "1",
-      origin: "*",
-    });
-    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, {
-      revalidate: LINKS_TTL,
-    });
-    if (!res.ok) {
-      discard(res);
-      return [];
-    }
-    const data = (await res.json()) as {
-      query?: { pages?: Record<string, { links?: { title: string }[] }> };
-    };
-    const pages = data.query?.pages ?? {};
-    const links = Object.values(pages).flatMap((p) => p.links ?? []);
-    const seen = new Set<string>();
+    const seen = new Set<string>([title]); // never link an article back to itself
     const out: BlueLink[] = [];
-    for (const l of links) {
-      if (NON_ARTICLE_PREFIX.test(l.title)) continue;
-      if (seen.has(l.title)) continue;
-      seen.add(l.title);
-      out.push({ title: l.title });
-      if (out.length >= limit) break;
+    const push = (titles: string[]) => {
+      for (const t of titles) {
+        if (out.length >= limit) break;
+        if (!t || NON_ARTICLE_PREFIX.test(t) || LOW_VALUE_TITLE.test(t) || seen.has(t)) continue;
+        seen.add(t);
+        out.push({ title: t });
+      }
+    };
+
+    const [similar, summary, inTextRaw] = await Promise.all([
+      getSimilarArticles(title, limit),
+      getPageSummary(title).catch(() => null),
+      getInArticleLinks(title, limit),
+    ]);
+
+    // 1) content-similarity (the primary relevance signal)
+    push(similar);
+
+    // 2) lead-section links the extract mentions
+    const extract = (summary?.extract ?? "").toLowerCase();
+    if (extract && out.length < limit) {
+      push(inTextRaw.filter((t) => extract.includes(t.toLowerCase())));
     }
+
+    // 3) remaining in-article links (only if still short)
+    if (out.length < limit) push(inTextRaw);
+
     return out;
   });
+}
+
+/** Wikipedia "morelike" search — content-similar articles, the best relatedness signal. */
+async function getSimilarArticles(title: string, limit: number): Promise<string[]> {
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    list: "search",
+    srsearch: `morelike:${title}`,
+    srnamespace: "0",
+    srlimit: String(Math.min(limit + 6, 50)),
+    srqiprofile: "classic_noboostlinks",
+    origin: "*",
+  });
+  const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
+  if (!res.ok) {
+    discard(res);
+    return [];
+  }
+  const data = (await res.json()) as {
+    query?: { search?: { title: string }[] };
+  };
+  return (data.query?.search ?? []).map((s) => s.title);
+}
+
+/** The article's in-text links (main namespace), in API order. */
+async function getInArticleLinks(title: string, limit: number): Promise<string[]> {
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    prop: "links",
+    titles: title,
+    plnamespace: "0",
+    pllimit: String(Math.min(limit * 6, 500)),
+    redirects: "1",
+    origin: "*",
+  });
+  const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: LINKS_TTL });
+  if (!res.ok) {
+    discard(res);
+    return [];
+  }
+  const data = (await res.json()) as {
+    query?: { pages?: Record<string, { links?: { title: string }[] }> };
+  };
+  const pages = data.query?.pages ?? {};
+  return Object.values(pages).flatMap((p) => (p.links ?? []).map((l) => l.title));
 }

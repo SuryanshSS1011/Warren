@@ -19,6 +19,12 @@
   pointer-events: none;
 }
 
+/* desktop: no scrim (HUD floats over the graph by design). On mobile it becomes a top
+   band that occludes nodes drifting under the controls/stat strip — see @media below. */
+.hudScrim {
+  display: none;
+}
+
 /* ---------- graph ---------- */
 .viewport {
   position: absolute;
@@ -103,6 +109,11 @@
 }
 .node:hover {
   transform: translateZ(0) scale(1.04);
+}
+.node:focus-visible,
+.nodeDot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .node.selected:hover {
   transform: scale(1.06);
@@ -228,7 +239,7 @@
   position: absolute;
   top: 22px;
   left: 24px;
-  z-index: 6;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -313,7 +324,7 @@
   position: absolute;
   top: 22px;
   right: 24px;
-  z-index: 6;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -350,13 +361,27 @@
   color: var(--ink-faint);
   margin-left: 4px;
 }
+.swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  transition:
+    transform 0.15s,
+    border-color 0.2s;
+}
+.swatch:hover {
+  transform: scale(1.12);
+}
 
 /* ---------- spine rail + stats ---------- */
 .spineRail {
   position: absolute;
   left: 24px;
   bottom: 66px;
-  z-index: 6;
+  z-index: 10;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -414,7 +439,7 @@
   position: absolute;
   left: 24px;
   bottom: 24px;
-  z-index: 6;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -460,7 +485,7 @@
   left: 50%;
   bottom: 120px;
   /* horizontal centering (x: -50%) + fade handled by motion (see ExploreMap) */
-  z-index: 6;
+  z-index: 10;
   max-width: min(56ch, 72vw);
   text-align: center;
   font-family: var(--font-serif);
@@ -491,7 +516,7 @@
   top: 50%;
   right: 24px;
   /* vertical centering + enter/exit handled by motion (see BurrowCard) */
-  z-index: 7;
+  z-index: 40;
   width: min(380px, 38vw);
   max-height: min(78vh, 720px);
   display: flex;
@@ -505,6 +530,17 @@
   box-shadow:
     0 30px 80px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(244, 239, 227, 0.02);
+}
+.burrowGrabber {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(244, 239, 227, 0.28);
 }
 .burrowClose {
   position: absolute;
@@ -952,7 +988,99 @@
 }
 
 /* ---------- responsive ---------- */
+/* ---------- mobile ----------
+   The bottom-sheet burrow owns the lower half, so the HUD lives in a tidy top band:
+   brand (row 1) → scrollable controls (row 2) → stat strip (row 3), each on its own line
+   with no overlap. The graph sits beneath (z-index scale: graph 1 < HUD 10 < sheet 40). */
 @media (max-width: 880px) {
+  /* top band that occludes graph nodes behind the HUD (brand + controls + stats).
+     z 8 = above the graph (1), below the HUD (10). */
+  .hudScrim {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 158px;
+    z-index: 8;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      var(--bg-0) 0%,
+      color-mix(in oklab, var(--bg-0), transparent 6%) 62%,
+      color-mix(in oklab, var(--bg-0), transparent 35%) 86%,
+      transparent 100%
+    );
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+
+  /* brand: compact, top-left, single row */
+  .header {
+    top: 12px;
+    left: 14px;
+    right: 14px;
+    max-width: none;
+    gap: 0;
+  }
+  .titlecard,
+  .spineRail,
+  .brandTag {
+    display: none;
+  }
+  .ctlHint {
+    display: none;
+  }
+
+  /* controls: full-width horizontally-scrollable strip on its own row */
+  .controls {
+    top: 52px;
+    left: 0;
+    right: 0;
+    padding: 0 14px 4px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent);
+    mask-image: linear-gradient(90deg, #000 92%, transparent);
+  }
+  .controls::-webkit-scrollbar {
+    display: none;
+  }
+  .ctl {
+    flex: none;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+  }
+  .swatch {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* stat strip: its own row below the controls, compact */
+  .statStrip {
+    top: 104px;
+    left: 14px;
+    right: 14px;
+    bottom: auto;
+    width: max-content;
+    max-width: calc(100% - 28px);
+    font-size: 10.5px;
+    padding: 7px 12px;
+  }
+
+  /* the floating subtitle is redundant on mobile (the bridge shows inside the burrow
+     card) and was the main thing colliding with the graph — hide it */
+  .subtitle {
+    display: none;
+  }
+
+  /* bottom-sheet burrow — capped so it never reaches up into the HUD band */
   .burrow {
     top: auto;
     bottom: 0;
@@ -960,39 +1088,31 @@
     left: 0;
     width: 100%;
     max-width: none;
-    max-height: 56vh;
+    max-height: 62vh;
     border-radius: 20px 20px 0 0;
   }
-  .header {
-    max-width: 60vw;
-  }
-  .titlecard {
-    display: none;
-  }
-  .spineRail {
-    display: none;
-  }
+  /* push the graph's framing down a touch so settled nodes avoid the top HUD band;
+     handled in JS via reserveTop — this just keeps the strip readable over the graph */
+  .controls,
   .statStrip {
-    bottom: auto;
-    top: 74px;
-    left: 24px;
+    background: transparent;
   }
-  .subtitle {
-    bottom: auto;
-    top: 120px;
-    font-size: 15px;
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .born,
+  .subtitleAnim,
+  .burrowThumbImg {
+    animation: none !important;
   }
-  /* tighten the control cluster so it doesn't crowd the brand on phones */
-  .controls {
-    top: 18px;
-    right: 16px;
-    gap: 6px;
-  }
-  .ctlHint {
-    display: none;
-  }
-  .header {
-    top: 18px;
-    left: 16px;
+  .node,
+  .nodeDot,
+  .spinePill,
+  .chip,
+  .ctl,
+  .card,
+  .swatch {
+    transition: none !important;
   }
 }
