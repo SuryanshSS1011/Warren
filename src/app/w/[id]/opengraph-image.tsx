@@ -177,24 +177,11 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         >
           <span style={{ color: IVORY, fontWeight: 700 }}>{stats.hops}</span> hops
           <span style={{ opacity: 0.4 }}>·</span>
-          <span style={{ color: IVORY, fontWeight: 700 }}>{stats.categories}</span> categories
+          <span style={{ color: IVORY, fontWeight: 700 }}>{stats.categories}</span> fields
           <span style={{ opacity: 0.4 }}>·</span>
           <span style={{ color: IVORY, fontWeight: 700 }}>{stats.minutes}</span> min
           <span style={{ opacity: 0.4 }}>·</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: 2 }}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <span
-                key={i}
-                style={{
-                  display: "flex",
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  background: i < stats.stars ? GOLD : "rgba(244,239,227,0.18)",
-                }}
-              />
-            ))}
-          </span>
+          deepest dive <span style={{ color: GOLD, fontWeight: 700 }}>{stats.stars}</span>
         </div>
 
         <div
