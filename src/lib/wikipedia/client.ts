@@ -25,7 +25,7 @@ function sleep(ms: number) {
 /** Fetch through the queue, retrying on 429 (honoring Retry-After) and 5xx with backoff.
     `revalidate` is the per-call Next fetch-cache TTL (seconds); pass the right one per
     endpoint instead of inheriting a single hard-coded value. */
-async function wikiFetch(
+export async function wikiFetch(
   url: string,
   opts?: { revalidate?: number; init?: RequestInit },
 ): Promise<Response> {
@@ -107,6 +107,74 @@ export async function getRelated(title: string): Promise<{ pages: PageSummary[] 
 }
 
 export type BlueLink = { title: string };
+
+/** Live Wikipedia title search (opensearch) for the command palette — lets a user jump to
+    ANY article, not just the offline corpus. */
+export async function searchWikipedia(query: string, limit = 10): Promise<string[]> {
+  const params = new URLSearchParams({
+    action: "opensearch",
+    format: "json",
+    search: query,
+    limit: String(Math.min(limit, 20)),
+    namespace: "0",
+    origin: "*",
+  });
+  const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: 60 * 60 });
+  if (!res.ok) {
+    discard(res);
+    return [];
+  }
+  const data = (await res.json()) as [string, string[], string[], string[]];
+  return data[1] ?? [];
+}
+
+const CATEGORY_TTL = 60 * 60 * 24 * 30; // 30 days — an article's category is stable
+
+// Wikipedia maintenance/meta categories — not meaningful topic labels.
+const META_CATEGORY =
+  /^(Articles|All |Pages |Wikipedia|Webarchive|CS1|Use |Short description|Commons|Good articles|Featured|Coordinates|Hidden|Disambiguation|Redirects|Wikidata|Engvar|Dynamic lists|Vague|Use dmy|Use mdy)/i;
+
+// Time/event-bucket categories ("5th-century disestablishments", "1452 births",
+// "Establishments in 80 AD") — real but useless as a topic color. Anything with a year,
+// "century", births/deaths, or (dis)establishments is dropped.
+const TIME_CATEGORY =
+  /(\b\d{3,4}\b|century|\bbirths?\b|\bdeaths?\b|(dis)?establishment|introduced in|introductions)/i;
+
+/** The article's best "topic" Wikipedia category for coloring. Filters maintenance + time
+    buckets, then prefers a concise, digit-free, general category over a noisy specific one
+    (shortest qualifying category by word count). Returns null if nothing usable. */
+export async function getArticleCategory(title: string): Promise<string | null> {
+  return cached(`wiki:category:${title}`, CATEGORY_TTL, async () => {
+    const params = new URLSearchParams({
+      action: "query",
+      format: "json",
+      prop: "categories",
+      titles: title,
+      clshow: "!hidden",
+      cllimit: "30",
+      redirects: "1",
+      origin: "*",
+    });
+    const res = await wikiFetch(`${ACTION_BASE}?${params.toString()}`, { revalidate: CATEGORY_TTL });
+    if (!res.ok) {
+      discard(res);
+      return null;
+    }
+    const data = (await res.json()) as {
+      query?: { pages?: Record<string, { categories?: { title: string }[] }> };
+    };
+    const pages = data.query?.pages ?? {};
+    const candidates = Object.values(pages)
+      .flatMap((p) => p.categories ?? [])
+      .map((c) => c.title.replace(/^Category:/, ""))
+      .filter((c) => c && !META_CATEGORY.test(c) && !TIME_CATEGORY.test(c) && !/\d/.test(c));
+    if (!candidates.length) return null;
+    // prefer the most general (fewest words); ties keep Wikipedia's order (earlier = closer
+    // to the lead, usually more central to the topic).
+    candidates.sort((a, b) => a.split(/\s+/).length - b.split(/\s+/).length);
+    return candidates[0];
+  });
+}
 
 // Namespaces that are not real articles (File:, Help:, Category:, etc.).
 const NON_ARTICLE_PREFIX = /^(File|Image|Help|Category|Template|Wikipedia|Portal|Special|Talk|User|Module|Draft|MediaWiki):/i;

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import styles from "@/app/explore.module.css";
 import { hueOf, START_ID } from "@/lib/explore/corpus";
-import { placeholder, resolve } from "@/lib/explore/article-store";
+import { liveIdFor, placeholder, resolve, upsertLive } from "@/lib/explore/article-store";
 import { badgeFor, bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
@@ -77,6 +77,8 @@ export default function ExploreMap() {
   const [saving, setSaving] = useState(false);
   // AI auto-titles keyed by "firstId>lastId"; overlays the canned title when present.
   const [aiTitles, setAiTitles] = useState<Record<string, string>>({});
+  // Highlights saved from the embedded Wikipedia reader, keyed by node id (session-only).
+  const [, setHighlights] = useState<Record<string, string[]>>({});
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
   const [startedAt] = useState(() => Date.now() - 4 * 60 * 1000);
@@ -270,6 +272,16 @@ export default function ExploreMap() {
     return sp ? sp.bridge : null;
   })();
 
+  // Spine titles up to (and including) the selected node — the "thread" the narrative
+  // panel summarizes. When the selection is off-spine, fall back to the full spine.
+  const pathTitles = (() => {
+    if (!selectedId) return [];
+    const cut = spineIds.includes(selectedId)
+      ? spineIds.slice(0, spineIds.indexOf(selectedId) + 1)
+      : spineIds;
+    return cut.map((id) => (resolve(id) ?? placeholder(id)).title);
+  })();
+
   // Canned title is instant; an AI title overlays it when available (keyed by first→last
   // so it re-fetches only when the journey's endpoints change). Falls back to canned.
   const cannedTitle = titleFor(spineIds, (id) => (resolve(id) ?? placeholder(id)).title);
@@ -316,6 +328,68 @@ export default function ExploreMap() {
   const flashToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3200);
+  }, []);
+
+  // A blue-link click inside the embedded Wikipedia reader spawns a live node — the same
+  // path as a chip click, just sourced from the iframe. We materialize the target as a
+  // live article, then hop into it. If the originating title isn't already in the map,
+  // we hop from whatever node is currently selected.
+  const handleHopTo = useCallback(
+    (fromTitle: string, toTitle: string) => {
+      if (!toTitle) return;
+      upsertLive({ title: toTitle });
+      const toId = liveIdFor(toTitle);
+      const fromLiveId = liveIdFor(fromTitle);
+      const fromId = presentIds.has(fromLiveId)
+        ? fromLiveId
+        : selectedId ?? spineIds[spineIds.length - 1];
+      if (presentIds.has(toId)) {
+        handleChip(fromId, toId, true);
+        return;
+      }
+      const isSpine = spineIds[spineIds.length - 1] === fromId;
+      addHop(fromId, toId, isSpine);
+    },
+    // presentIds is recomputed each render; track membership via present.length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedId, spineIds, addHop, handleChip, present.length],
+  );
+
+  const handleHighlight = useCallback(
+    (nodeId: string, text: string) => {
+      if (!text) return;
+      setHighlights((prev) => ({
+        ...prev,
+        [nodeId]: [...(prev[nodeId] ?? []), text],
+      }));
+      flashToast("Highlight saved");
+    },
+    [flashToast],
+  );
+
+  // Keep the latest handleHopTo in a ref so the SSE connection (below) doesn't tear down
+  // and reconnect on every hop/selection (which would drop events during the gap).
+  const handleHopToRef = useRef(handleHopTo);
+  useEffect(() => {
+    handleHopToRef.current = handleHopTo;
+  }, [handleHopTo]);
+
+  // Live sync from the browser extension: each Wikipedia hop the user makes while browsing
+  // streams in here (server-sent events) and spawns the matching node. No-ops when no
+  // extension is connected. WIKI_HOP carries from/to; WIKI_PAGE_LOAD just marks presence.
+  useEffect(() => {
+    const es = new EventSource("/api/extension/hop");
+    es.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data) as { type: string; from?: string; to?: string };
+        if (msg.type === "WIKI_HOP" && msg.from && msg.to) {
+          handleHopToRef.current(msg.from, msg.to);
+        }
+      } catch {
+        /* ignore malformed events */
+      }
+    };
+    return () => es.close();
   }, []);
 
   const handleShare = useCallback(async () => {
@@ -519,8 +593,11 @@ export default function ExploreMap() {
             presentIds={presentIds}
             incomingBridge={incomingBridge}
             accent={accent}
+            pathTitles={pathTitles}
             onChip={handleChip}
             onClose={() => setSelectedId(null)}
+            onHopTo={handleHopTo}
+            onHighlight={handleHighlight}
           />
         ) : null}
       </AnimatePresence>
