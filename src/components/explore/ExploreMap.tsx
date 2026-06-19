@@ -405,10 +405,9 @@ export default function ExploreMap() {
     return () => es.close();
   }, []);
 
-  const handleShare = useCallback(async () => {
-    if (saving) return;
-    setSaving(true);
-    const snapshot: WarrenSnapshot = {
+  // Build the serializable snapshot of the current map (shared by Share + autosave).
+  const buildSnapshot = useCallback(
+    (): WarrenSnapshot => ({
       title: autoTitle,
       spine: spineIds,
       nodes: nodes.map((n) => ({
@@ -420,7 +419,38 @@ export default function ExploreMap() {
       edges,
       startedAt,
       stats: { hops, categories: cats, minutes: elapsed, stars },
-    };
+    }),
+    [autoTitle, spineIds, nodes, edges, startedAt, hops, cats, elapsed, stars],
+  );
+
+  // ---- autosave: every session is a warren. Once the map has a real path (≥2 nodes), we
+  // upsert it (debounced) to a stable row so it shows up in the Super Warren meta-graph
+  // without a manual Share. No-ops (503) when Supabase isn't configured. ----
+  const warrenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (nodes.length < 2) return;
+    const snapshot = buildSnapshot();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/warren", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: warrenIdRef.current ?? undefined, snapshot }),
+        });
+        if (!res.ok) return; // 503 unconfigured / transient — stay silent, retry next change
+        const data = (await res.json()) as { id?: string };
+        if (data.id) warrenIdRef.current = data.id;
+      } catch {
+        /* offline — autosave is best-effort */
+      }
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [buildSnapshot, nodes.length]);
+
+  const handleShare = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    const snapshot = buildSnapshot();
     try {
       const res = await fetch("/api/warren", {
         method: "POST",
@@ -448,7 +478,7 @@ export default function ExploreMap() {
     } finally {
       setSaving(false);
     }
-  }, [saving, autoTitle, spineIds, nodes, edges, startedAt, hops, cats, elapsed, stars, flashToast]);
+  }, [saving, buildSnapshot, flashToast]);
 
   return (
     <div className={styles.root} ref={rootRef}>
@@ -571,6 +601,9 @@ export default function ExploreMap() {
         </button>
         <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
           ◫ Gallery
+        </Link>
+        <Link className={styles.ctl} href="/super" style={{ textDecoration: "none" }}>
+          ✦ Super Warren
         </Link>
       </div>
 
