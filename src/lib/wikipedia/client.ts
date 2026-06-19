@@ -25,7 +25,7 @@ function sleep(ms: number) {
 /** Fetch through the queue, retrying on 429 (honoring Retry-After) and 5xx with backoff.
     `revalidate` is the per-call Next fetch-cache TTL (seconds); pass the right one per
     endpoint instead of inheriting a single hard-coded value. */
-async function wikiFetch(
+export async function wikiFetch(
   url: string,
   opts?: { revalidate?: number; init?: RequestInit },
 ): Promise<Response> {
