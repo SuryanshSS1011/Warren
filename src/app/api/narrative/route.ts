@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { generatePathNarrative } from "@/lib/ai/narrative";
+import { aiErrorResponse } from "@/lib/ai/error-response";
 
 const NarrativeRequest = z.object({
   path: z.array(z.string().min(1)).min(1).max(40),
@@ -26,9 +27,6 @@ export async function POST(req: NextRequest) {
       { headers: { "Cache-Control": "private, max-age=3600" } },
     );
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "ai error" },
-      { status: 502 },
-    );
+    return aiErrorResponse(err);
   }
 }

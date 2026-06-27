@@ -154,7 +154,11 @@ export default function BurrowCard({
       <div className={styles.burrowThumb} style={{ "--cat-h": h } as React.CSSProperties}>
         {thumbSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className={styles.burrowThumbImg} src={thumbSrc} alt="" />
+          <img
+            className={styles.burrowThumbImg}
+            src={thumbSrc}
+            alt={`Lead image for ${article.title}`}
+          />
         ) : null}
         <span className={styles.burrowThumbCap}>
           {thumbSrc ? `Wikipedia · ${article.title}` : article.imgHint}
@@ -203,7 +207,7 @@ export default function BurrowCard({
         {article.blurb ? <p className={styles.burrowBlurb}>{article.blurb}</p> : null}
         {incomingBridge ? (
           <div className={styles.burrowBridge}>
-            <span className={styles.burrowBridgeLabel}>the bridge here</span>
+            <span className={styles.burrowBridgeLabel}>how you got here</span>
             <p>{incomingBridge}</p>
           </div>
         ) : null}

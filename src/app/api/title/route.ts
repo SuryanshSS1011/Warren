@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { generateAutoTitle } from "@/lib/ai/auto-title";
+import { aiErrorResponse } from "@/lib/ai/error-response";
 
 const TitleRequest = z.object({
   path: z.array(z.string().min(1)).min(1),
@@ -23,9 +24,6 @@ export async function POST(req: NextRequest) {
     const title = await generateAutoTitle(parsed.data.path);
     return NextResponse.json({ title });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "ai error" },
-      { status: 502 },
-    );
+    return aiErrorResponse(err);
   }
 }
