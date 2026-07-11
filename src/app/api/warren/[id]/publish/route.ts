@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { PersistenceUnavailableError, setWarrenVisibility } from "@/lib/explore/repository";
+import { getUser } from "@/lib/supabase/auth";
 
 const ANON_COOKIE = "warren_anon";
 
@@ -24,14 +25,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
 
+  // Ownership can come from the account (signed-in user) or the anonymous cookie.
   const anonId = (await cookies()).get(ANON_COOKIE)?.value;
-  if (!anonId) {
+  const user = await getUser();
+  if (!anonId && !user) {
     return NextResponse.json({ error: "no session" }, { status: 401 });
   }
 
   try {
-    const { ok } = await setWarrenVisibility(id, anonId, parsed.data.isPublic);
-    // ok is false when the warren doesn't exist or isn't owned by this anon.
+    const { ok } = await setWarrenVisibility(
+      id,
+      { anonId, userId: user?.id },
+      parsed.data.isPublic,
+    );
+    // ok is false when the warren doesn't exist or isn't owned by this viewer.
     if (!ok) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json({ id, isPublic: parsed.data.isPublic });
   } catch (err) {
