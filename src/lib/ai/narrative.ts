@@ -1,6 +1,7 @@
 import "server-only";
-import { generateText } from "./provider";
+import { generateText, activeModel } from "./provider";
 import { cached } from "@/lib/cache/redis";
+import { aiAttribution, type AttributedText } from "@/lib/attribution";
 
 const SYSTEM = [
   "You are a semantic cartographer. Synthesize a single, punchy paragraph that traces the",
@@ -23,4 +24,11 @@ export async function generatePathNarrative(path: string[]): Promise<string> {
       maxTokens: 300,
     }),
   );
+}
+
+/** As {@link generatePathNarrative}, but stamped with CC BY-SA / AI-generated attribution
+    for every article the path traverses (PRODUCT_PLAN §1.1). */
+export async function generatePathNarrativeAttributed(path: string[]): Promise<AttributedText> {
+  const text = await generatePathNarrative(path);
+  return { text, attribution: aiAttribution(activeModel(), path) };
 }

@@ -1,6 +1,7 @@
 import "server-only";
-import { generateText } from "./provider";
+import { generateText, activeModel } from "./provider";
 import { cached } from "@/lib/cache/redis";
+import { aiAttribution, type AttributedText } from "@/lib/attribution";
 
 export type ConnectiveTissueInput = {
   from: { title: string; description?: string };
@@ -25,4 +26,16 @@ export async function generateConnectiveTissue(input: ConnectiveTissueInput) {
       maxTokens: 120,
     }),
   );
+}
+
+/** As {@link generateConnectiveTissue}, but stamped with CC BY-SA / AI-generated attribution
+    for the two articles it bridges (PRODUCT_PLAN §1.1). */
+export async function generateConnectiveTissueAttributed(
+  input: ConnectiveTissueInput,
+): Promise<AttributedText> {
+  const text = await generateConnectiveTissue(input);
+  return {
+    text,
+    attribution: aiAttribution(activeModel(), [input.from.title, input.to.title]),
+  };
 }

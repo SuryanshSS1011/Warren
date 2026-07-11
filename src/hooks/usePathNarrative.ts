@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPersistentCache } from "@/lib/explore/persistent-cache";
+import type { AiAttribution } from "@/lib/attribution";
 
 // localStorage-backed cache keyed by the path, so the narrative survives BurrowCard
 // unmount/remount AND a full page reload — the same path on this device never refetches.
@@ -16,6 +17,7 @@ export function usePathNarrative(focusedNodeId: string | null, path: string[]) {
   const cachedValue = focusedNodeId && path.length >= 1 ? narrativeCache.get(pathKey) ?? null : null;
 
   const [narrative, setNarrative] = useState<string | null>(cachedValue);
+  const [attribution, setAttribution] = useState<AiAttribution | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +28,7 @@ export function usePathNarrative(focusedNodeId: string | null, path: string[]) {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (!focusedNodeId || path.length < 1) {
       setNarrative(null);
+      setAttribution(null);
       return;
     }
     const hit = narrativeCache.get(pathKey);
@@ -54,9 +57,15 @@ export function usePathNarrative(focusedNodeId: string | null, path: string[]) {
           }
           throw new Error("Failed to fetch narrative");
         }
-        const data = (await res.json()) as { narrative: string };
+        const data = (await res.json()) as {
+          narrative: string;
+          attribution?: AiAttribution;
+        };
         narrativeCache.set(pathKey, data.narrative);
-        if (!cancelled) setNarrative(data.narrative);
+        if (!cancelled) {
+          setNarrative(data.narrative);
+          setAttribution(data.attribution ?? null);
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
@@ -71,5 +80,5 @@ export function usePathNarrative(focusedNodeId: string | null, path: string[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedNodeId, pathKey]);
 
-  return { narrative, isLoading, error };
+  return { narrative, attribution, isLoading, error };
 }

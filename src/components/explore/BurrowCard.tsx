@@ -12,6 +12,7 @@ import {
 } from "@/lib/explore/article-store";
 import { usePathNarrative } from "@/hooks/usePathNarrative";
 import { useLiveArticle } from "./useLiveArticle";
+import { AiAttribution } from "./AiAttribution";
 
 type BurrowCardProps = {
   article: ResolvedArticle;
@@ -54,6 +55,7 @@ export default function BurrowCard({
   // The semantic path narrative for the spine leading to this node.
   const {
     narrative,
+    attribution: narrativeAttribution,
     isLoading: narrativeLoading,
     error: narrativeError,
   } = usePathNarrative(article.id, pathTitles);
@@ -224,7 +226,12 @@ export default function BurrowCard({
             ) : narrativeError ? (
               <p className={styles.narrativeError}>{narrativeError}</p>
             ) : narrative ? (
-              <p className={styles.narrativeText}>{narrative}</p>
+              <>
+                <p className={styles.narrativeText}>{narrative}</p>
+                {narrativeAttribution ? (
+                  <AiAttribution attribution={narrativeAttribution} />
+                ) : null}
+              </>
             ) : null}
           </div>
         ) : null}

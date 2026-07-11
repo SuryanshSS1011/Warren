@@ -731,6 +731,41 @@
   opacity: 0.8;
   line-height: 1.4;
 }
+/* AI-generated / CC BY-SA attribution footer — the legal flag required on every
+   AI-derived surface (docs/PRODUCT_PLAN.md §1.1). Small, faint, never obtrusive. */
+.aiAttribution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+.aiAttributionFlag {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 78%);
+  color: color-mix(in oklch, var(--accent-hi), var(--ink-faint) 30%);
+  white-space: nowrap;
+}
+.aiAttributionSep {
+  opacity: 0.5;
+}
+.aiAttribution a {
+  color: var(--ink-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklch, var(--ink-faint), transparent 40%);
+}
+.aiAttribution a:hover {
+  color: var(--ink);
+}
 .narrativeSkeleton {
   display: flex;
   flex-direction: column;

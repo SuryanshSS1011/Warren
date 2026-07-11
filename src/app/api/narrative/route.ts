@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { generatePathNarrative } from "@/lib/ai/narrative";
+import { generatePathNarrativeAttributed } from "@/lib/ai/narrative";
 import { aiErrorResponse } from "@/lib/ai/error-response";
 
 const NarrativeRequest = z.object({
@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
   try {
-    const narrative = await generatePathNarrative(parsed.data.path);
+    const { text, attribution } = await generatePathNarrativeAttributed(parsed.data.path);
     return NextResponse.json(
-      { narrative },
+      { narrative: text, attribution },
       { headers: { "Cache-Control": "private, max-age=3600" } },
     );
   } catch (err) {
