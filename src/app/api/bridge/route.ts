@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { generateConnectiveTissue } from "@/lib/ai/connective-tissue";
+import { generateConnectiveTissueAttributed } from "@/lib/ai/connective-tissue";
 import { aiErrorResponse } from "@/lib/ai/error-response";
 
 const BridgeRequest = z.object({
@@ -22,8 +22,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
   try {
-    const bridge = await generateConnectiveTissue(parsed.data);
-    return NextResponse.json({ bridge });
+    const { text, attribution } = await generateConnectiveTissueAttributed(parsed.data);
+    return NextResponse.json({ bridge: text, attribution });
   } catch (err) {
     return aiErrorResponse(err);
   }

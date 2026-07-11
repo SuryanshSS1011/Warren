@@ -122,7 +122,7 @@ export default function ExploreMap() {
       const to = resolve(toId) ?? placeholder(toId);
       if (!from) return;
       try {
-        const ai = await fetchBridge(
+        const { text: ai } = await fetchBridge(
           { title: from.title, description: from.blurb },
           { title: to.title, description: to.blurb },
         );
@@ -295,7 +295,7 @@ export default function ExploreMap() {
     let cancelled = false;
     const titles = spineIds.map((id) => resolve(id)?.title).filter(Boolean) as string[];
     fetchTitle(titles)
-      .then((t) => {
+      .then(({ text: t }) => {
         if (cancelled || !t) return;
         titleCache.set(titleKey, t);
         setAiTitles((m) => ({ ...m, [titleKey]: t }));

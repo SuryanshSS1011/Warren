@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { generateAutoTitle } from "@/lib/ai/auto-title";
+import { generateAutoTitleAttributed } from "@/lib/ai/auto-title";
 import { aiErrorResponse } from "@/lib/ai/error-response";
 
 const TitleRequest = z.object({
@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
   try {
-    const title = await generateAutoTitle(parsed.data.path);
-    return NextResponse.json({ title });
+    const { text, attribution } = await generateAutoTitleAttributed(parsed.data.path);
+    return NextResponse.json({ title: text, attribution });
   } catch (err) {
     return aiErrorResponse(err);
   }
