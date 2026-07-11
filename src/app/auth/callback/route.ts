@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { claimAnonWarrens } from "@/lib/explore/repository";
+import { ensureProfile } from "@/lib/billing/profile";
 
 const ANON_COOKIE = "warren_anon";
 
@@ -36,12 +37,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/?auth_error=exchange_failed", url.origin));
   }
 
-  // Auto-claim anonymous warrens for this account (best-effort — never block sign-in on it).
+  // First sign-in bootstrapping (best-effort — never block sign-in on these):
+  //  1. Ensure a profile row exists and start the 14-day reverse trial (full Pro) on first
+  //     creation; idempotent, so a returning user's trial/tier is untouched.
+  //  2. Auto-claim any warrens the user created anonymously.
   try {
+    await ensureProfile(data.user.id);
     const anonId = (await cookies()).get(ANON_COOKIE)?.value;
     if (anonId) await claimAnonWarrens(anonId, data.user.id);
   } catch {
-    // A claim failure shouldn't strand the user unauthenticated; they're signed in either way.
+    // A bootstrap failure shouldn't strand the user unauthenticated; they're signed in anyway.
   }
 
   return NextResponse.redirect(new URL(next, url.origin));
