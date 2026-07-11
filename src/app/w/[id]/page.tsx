@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import ReplayMap from "@/components/explore/ReplayMap";
 import { loadWarren } from "@/lib/explore/repository";
+
+const ANON_COOKIE = "warren_anon";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -28,7 +31,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function WarrenPage({ params }: Props) {
   const { id } = await params;
-  const warren = await loadWarren(id);
+  // Pass the viewer's anon id so an owner can view (and publish) their own private warren.
+  const anonId = (await cookies()).get(ANON_COOKIE)?.value;
+  const warren = await loadWarren(id, anonId);
   if (!warren) notFound();
   return <ReplayMap warren={warren} />;
 }

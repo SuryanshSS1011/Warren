@@ -61,7 +61,9 @@ export async function saveWarren(
         title: snapshot.title,
         spine: snapshot.spine,
         started_at: new Date(snapshot.startedAt).toISOString(),
-        is_public: true,
+        // Private by default — reading trails are intellectual-privacy data (PRODUCT_PLAN
+        // §1.5). Publishing is an explicit, opt-in act via publishWarren().
+        is_public: false,
         stats: snapshot.stats,
       })
       .select("id")
@@ -107,42 +109,69 @@ export async function saveWarren(
 }
 
 // React.cache dedupes the fetch across generateMetadata + page + opengraph-image.
-export const loadWarren = cache(async (id: string): Promise<SavedWarren | null> => {
+// A warren is visible if it's published (is_public) OR the viewer owns it (matching
+// anon_id) — so an author can always see and share-preview their own private trail.
+export const loadWarren = cache(
+  async (id: string, viewerAnonId?: string): Promise<SavedWarren | null> => {
+    const db = getAdminClient();
+    if (!db) return null;
+
+    const { data: w, error } = await db
+      .from("warren")
+      .select("id, title, spine, started_at, stats, is_public, anon_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (error || !w) return null;
+    const isOwner = !!viewerAnonId && w.anon_id === viewerAnonId;
+    if (!w.is_public && !isOwner) return null;
+
+    const [{ data: nodes }, { data: edges }] = await Promise.all([
+      db.from("node").select("id, title, category, depth").eq("warren_id", id),
+      db.from("edge").select("source, target, bridge, spine").eq("warren_id", id),
+    ]);
+
+    return {
+      id: w.id,
+      title: w.title ?? "Untitled warren",
+      spine: (w.spine ?? []) as string[],
+      startedAt: new Date(w.started_at).getTime(),
+      stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
+      isPublic: !!w.is_public,
+      isOwner,
+      nodes: (nodes ?? []).map((n) => ({
+        id: n.id,
+        title: n.title,
+        category: n.category ?? UNCATEGORIZED,
+        depth: n.depth ?? 0,
+      })),
+      edges: (edges ?? []).map((e) => ({
+        source: e.source,
+        target: e.target,
+        bridge: e.bridge ?? "",
+        spine: !!e.spine,
+      })),
+    };
+  },
+);
+
+/** Flip a warren's visibility. Only the owning anon may publish/unpublish it. */
+export async function setWarrenVisibility(
+  id: string,
+  anonId: string,
+  isPublic: boolean,
+): Promise<{ ok: boolean }> {
   const db = getAdminClient();
-  if (!db) return null;
-
-  const { data: w, error } = await db
+  if (!db) throw new PersistenceUnavailableError();
+  const { data, error } = await db
     .from("warren")
-    .select("id, title, spine, started_at, stats, is_public")
+    .update({ is_public: isPublic })
     .eq("id", id)
+    .eq("anon_id", anonId)
+    .select("id")
     .maybeSingle();
-  if (error || !w || !w.is_public) return null;
-
-  const [{ data: nodes }, { data: edges }] = await Promise.all([
-    db.from("node").select("id, title, category, depth").eq("warren_id", id),
-    db.from("edge").select("source, target, bridge, spine").eq("warren_id", id),
-  ]);
-
-  return {
-    id: w.id,
-    title: w.title ?? "Untitled warren",
-    spine: (w.spine ?? []) as string[],
-    startedAt: new Date(w.started_at).getTime(),
-    stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
-    nodes: (nodes ?? []).map((n) => ({
-      id: n.id,
-      title: n.title,
-      category: n.category ?? UNCATEGORIZED,
-      depth: n.depth ?? 0,
-    })),
-    edges: (edges ?? []).map((e) => ({
-      source: e.source,
-      target: e.target,
-      bridge: e.bridge ?? "",
-      spine: !!e.spine,
-    })),
-  };
-});
+  if (error) throw new Error(`set visibility: ${error.message}`);
+  return { ok: !!data };
+}
 
 /** A lightweight gallery row — enough to render a mini-trail thumbnail + stats card. */
 export type WarrenCard = {

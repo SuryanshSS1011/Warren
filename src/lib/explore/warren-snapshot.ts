@@ -37,4 +37,10 @@ export type SnapshotNode = z.infer<typeof SnapshotNode>;
 export type SnapshotEdge = z.infer<typeof SnapshotEdge>;
 export type WarrenSnapshot = z.infer<typeof WarrenSnapshot>;
 
-export type SavedWarren = WarrenSnapshot & { id: string };
+export type SavedWarren = WarrenSnapshot & {
+  id: string;
+  /** Whether this warren is published (publicly visible / indexable). */
+  isPublic: boolean;
+  /** Whether the requesting viewer owns this warren (may publish/unpublish it). */
+  isOwner: boolean;
+};

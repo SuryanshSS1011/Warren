@@ -829,6 +829,30 @@
   color: color-mix(in oklch, var(--accent-hi), var(--ink-faint) 20%);
   margin-bottom: 4px;
 }
+/* Owner-only publish/unpublish control (warrens are private by default, PRODUCT_PLAN §1.5). */
+.publishToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.publishState {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.publishState[data-public="true"] {
+  color: color-mix(in oklch, var(--accent-hi), var(--ink-faint) 20%);
+}
+.publishError {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-hi);
+  opacity: 0.85;
+}
 .narrativeSkeleton {
   display: flex;
   flex-direction: column;
