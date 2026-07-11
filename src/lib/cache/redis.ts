@@ -65,3 +65,29 @@ export async function cached<T>(
   await cacheSet<Envelope<T>>(key, { v: value }, isNegative ? negativeTtlSeconds : ttlSeconds);
   return value;
 }
+
+export type RateLimitResult = { ok: boolean; remaining: number; limit: number };
+
+/**
+ * Fixed-window rate limit: allow at most `limit` hits per `windowSeconds` for `key`.
+ * Fails OPEN — when Upstash is unconfigured or errors, requests are allowed (we never block
+ * legitimate users on an infra hiccup; abuse protection is best-effort until a real quota
+ * system arrives with the paywall). The window's TTL is set on the first hit only.
+ */
+export async function rateLimit(
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<RateLimitResult> {
+  const r = getRedis();
+  if (!r) return { ok: true, remaining: limit, limit };
+  try {
+    const k = `ratelimit:${key}`;
+    const count = await r.incr(k);
+    if (count === 1) await r.expire(k, windowSeconds);
+    const remaining = Math.max(0, limit - count);
+    return { ok: count <= limit, remaining, limit };
+  } catch {
+    return { ok: true, remaining: limit, limit };
+  }
+}

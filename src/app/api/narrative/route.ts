@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { generatePathNarrativeAttributed } from "@/lib/ai/narrative";
 import { aiErrorResponse } from "@/lib/ai/error-response";
+import { checkAiRateLimit } from "@/lib/ai/guard";
 
 const NarrativeRequest = z.object({
   path: z.array(z.string().min(1)).min(1).max(40),
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
+  const limited = await checkAiRateLimit(req, "narrative");
+  if (limited) return limited;
   try {
     const { text, attribution } = await generatePathNarrativeAttributed(parsed.data.path);
     return NextResponse.json(
