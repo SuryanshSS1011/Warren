@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./gallery.module.css";
 import MiniTrail from "@/components/explore/MiniTrail";
+import { SiteFooter } from "@/components/SiteFooter";
 import { listPublicWarrens, type WarrenCard } from "@/lib/explore/repository";
 
 export const metadata: Metadata = {
@@ -132,6 +133,7 @@ export default async function GalleryPage() {
           ) : null}
         </>
       )}
+      <SiteFooter />
     </div>
   );
 }

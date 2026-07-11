@@ -61,3 +61,35 @@ button {
   font-family: inherit;
   cursor: pointer;
 }
+
+/* Site-wide disclosure footer (see SiteFooter.tsx). Small and unobtrusive; used on
+   non-immersive pages (about, gallery). */
+.siteFooter {
+  border-top: 1px solid color-mix(in oklch, var(--ink-faint), transparent 80%);
+  padding: 20px 24px 28px;
+  text-align: center;
+}
+.siteFooter p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+}
+.siteFooter a {
+  color: var(--ink-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.siteFooter a:hover {
+  color: var(--ink);
+}
+.siteFooterFine {
+  margin-top: 6px !important;
+  font-size: 10.5px !important;
+  color: var(--ink-faint) !important;
+}
+/* Pages that scroll (about) opt out of the immersive body overflow lock. */
+.scrollPage {
+  overflow-y: auto;
+  height: 100%;
+}
