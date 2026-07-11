@@ -194,23 +194,29 @@ export async function setWarrenVisibility(
   if (!db) throw new PersistenceUnavailableError();
   if (!viewer.anonId && !viewer.userId) return { ok: false };
 
-  // Build an ownership predicate matching either id. Supabase .or() takes a comma list.
-  const ownership = [
-    viewer.userId ? `owner_id.eq.${viewer.userId}` : null,
-    viewer.anonId ? `anon_id.eq.${viewer.anonId}` : null,
-  ]
-    .filter(Boolean)
-    .join(",");
+  // Verify ownership by fetching the row and comparing in JS. We do NOT interpolate the
+  // (client-controlled) anon_id cookie into a PostgREST .or() filter string — that DSL is
+  // comma/paren-delimited, so a crafted cookie could inject extra predicates and match rows
+  // the caller doesn't own. Structured .eq() + in-memory comparison is injection-proof.
+  const { data: row, error: readErr } = await db
+    .from("warren")
+    .select("id, owner_id, anon_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (readErr) throw new Error(`set visibility (read): ${readErr.message}`);
+  if (!row) return { ok: false };
 
-  const { data, error } = await db
+  const owns =
+    (!!viewer.userId && row.owner_id === viewer.userId) ||
+    (!!viewer.anonId && row.anon_id === viewer.anonId);
+  if (!owns) return { ok: false };
+
+  const { error: updErr } = await db
     .from("warren")
     .update({ is_public: isPublic })
-    .eq("id", id)
-    .or(ownership)
-    .select("id")
-    .maybeSingle();
-  if (error) throw new Error(`set visibility: ${error.message}`);
-  return { ok: !!data };
+    .eq("id", id);
+  if (updErr) throw new Error(`set visibility: ${updErr.message}`);
+  return { ok: true };
 }
 
 /** A lightweight gallery row — enough to render a mini-trail thumbnail + stats card. */
