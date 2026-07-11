@@ -62,4 +62,25 @@ describe("GET /auth/callback", () => {
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/my");
   });
+
+  describe("open-redirect protection on `next`", () => {
+    beforeEach(() => {
+      exchangeCodeForSession.mockResolvedValue({ data: { user: { id: "u" } }, error: null });
+    });
+
+    it("allows a same-origin path", async () => {
+      const res = await GET(req("?code=abc&next=/my"));
+      expect(res.headers.get("location")).toBe("http://x/my");
+    });
+
+    it.each([
+      ["https://evil.com/phish", "absolute URL"],
+      ["//evil.com", "protocol-relative host"],
+      ["/\\evil.com", "backslash host trick"],
+      ["http://evil.com", "http absolute"],
+    ])("rejects %s (%s) and falls back to home", async (payload) => {
+      const res = await GET(req(`?code=abc&next=${encodeURIComponent(payload)}`));
+      expect(res.headers.get("location")).toBe("http://x/");
+    });
+  });
 });
