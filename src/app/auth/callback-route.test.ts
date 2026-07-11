@@ -3,12 +3,14 @@ import { NextRequest } from "next/server";
 
 const exchangeCodeForSession = vi.hoisted(() => vi.fn());
 const claimAnonWarrens = vi.hoisted(() => vi.fn());
+const ensureProfile = vi.hoisted(() => vi.fn());
 const cookieStore = vi.hoisted(() => ({ value: "anon-1" as string | undefined }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { exchangeCodeForSession } }),
 }));
 vi.mock("@/lib/explore/repository", () => ({ claimAnonWarrens }));
+vi.mock("@/lib/billing/profile", () => ({ ensureProfile }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => (cookieStore.value ? { value: cookieStore.value } : undefined) }),
 }));
@@ -21,6 +23,8 @@ beforeEach(() => {
   exchangeCodeForSession.mockReset();
   claimAnonWarrens.mockReset();
   claimAnonWarrens.mockResolvedValue(2);
+  ensureProfile.mockReset();
+  ensureProfile.mockResolvedValue({ id: "user-9", tier: "free" });
   cookieStore.value = "anon-1";
 });
 
@@ -42,6 +46,7 @@ describe("GET /auth/callback", () => {
     exchangeCodeForSession.mockResolvedValue({ data: { user: { id: "user-9" } }, error: null });
     const res = await GET(req("?code=abc&next=/my"));
     expect(exchangeCodeForSession).toHaveBeenCalledWith("abc");
+    expect(ensureProfile).toHaveBeenCalledWith("user-9"); // starts reverse trial on first sign-in
     expect(claimAnonWarrens).toHaveBeenCalledWith("anon-1", "user-9");
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/my");
