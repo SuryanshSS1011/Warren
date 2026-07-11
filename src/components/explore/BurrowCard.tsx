@@ -13,6 +13,7 @@ import {
 import { usePathNarrative } from "@/hooks/usePathNarrative";
 import { useLiveArticle } from "./useLiveArticle";
 import { AiAttribution } from "./AiAttribution";
+import { ArticleReader } from "./ArticleReader";
 
 type BurrowCardProps = {
   article: ResolvedArticle;
@@ -23,16 +24,9 @@ type BurrowCardProps = {
   pathTitles: string[];
   onChip: (fromId: string, toId: string, visited: boolean) => void;
   onClose: () => void;
-  /** A blue-link inside the embedded Wikipedia reader was clicked. */
+  /** A link inside the native article reader was clicked — spawn the target as a graph node. */
   onHopTo?: (fromTitle: string, toTitle: string) => void;
-  /** The reader saved a text highlight for this node. */
-  onHighlight?: (nodeId: string, text: string) => void;
 };
-
-type WikiMessage =
-  | { type: "WIKI_HOP"; from: string; to: string }
-  | { type: "WIKI_HIGHLIGHT"; title: string; text: string }
-  | { type: "WIKI_PAGE_LOAD"; title: string };
 
 type Chip = { id: string; title: string; category: string };
 
@@ -47,10 +41,9 @@ export default function BurrowCard({
   onChip,
   onClose,
   onHopTo,
-  onHighlight,
 }: BurrowCardProps) {
-  // Summary = AI bridge + extract + chips; Wikipedia = the live embedded reader.
-  const [tab, setTab] = useState<"summary" | "wikipedia">("summary");
+  // Summary = AI bridge + extract + chips; Read = the native full-article reader.
+  const [tab, setTab] = useState<"summary" | "read">("summary");
 
   // The semantic path narrative for the spine leading to this node.
   const {
@@ -71,30 +64,8 @@ export default function BurrowCard({
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // Listen for hops/highlights posted from the sandboxed Wikipedia reader. Because the
-  // iframe is sandboxed WITHOUT allow-same-origin, it runs in an opaque origin and its
-  // postMessage origin reports as "null" — so we accept "null" OR our own origin, and
-  // reject anything else.
-  const articleId = article.id;
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== "null" && event.origin !== window.location.origin) return;
-      const data = event.data as WikiMessage | undefined;
-      if (!data || typeof data !== "object") return;
-      // validate each field's shape — a malformed/spoofed message must not reach handlers
-      if (data.type === "WIKI_HOP") {
-        if (typeof data.from === "string" && typeof data.to === "string" && data.from && data.to) {
-          onHopTo?.(data.from, data.to);
-        }
-      } else if (data.type === "WIKI_HIGHLIGHT") {
-        if (typeof data.text === "string" && data.text.trim()) {
-          onHighlight?.(articleId, data.text);
-        }
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [articleId, onHopTo, onHighlight]);
+  // The native reader (Read tab) calls onHopTo directly on link clicks — no cross-origin
+  // postMessage bridge needed now that reading is in-app rather than in a sandboxed iframe.
 
   // Background-enrich with the live Wikipedia summary (real lead image, canonical extract)
   // and the in-article blue links. Falls back to whatever the article already carries.
@@ -177,21 +148,17 @@ export default function BurrowCard({
         </button>
         <button
           role="tab"
-          aria-selected={tab === "wikipedia"}
-          className={`${styles.burrowTab} ${tab === "wikipedia" ? styles.burrowTabActive : ""}`}
-          onClick={() => setTab("wikipedia")}
+          aria-selected={tab === "read"}
+          className={`${styles.burrowTab} ${tab === "read" ? styles.burrowTabActive : ""}`}
+          onClick={() => setTab("read")}
         >
-          Wikipedia
+          Read
         </button>
       </div>
-      {tab === "wikipedia" ? (
-        <div className={styles.burrowWiki}>
-          <iframe
-            className={styles.wikiFrame}
-            src={`/api/wiki/render?title=${encodeURIComponent(article.wikiTitle)}`}
-            title="Wikipedia"
-            sandbox="allow-scripts allow-popups"
-          />
+      {tab === "read" ? (
+        <div className={styles.burrowScroll}>
+          <h2 className={styles.burrowTitle}>{article.title}</h2>
+          <ArticleReader title={article.wikiTitle} onHopTo={onHopTo} />
         </div>
       ) : (
       <div className={styles.burrowScroll}>

@@ -105,8 +105,6 @@ export default function ExploreMap() {
   const [aiTitles, setAiTitles] = useState<Record<string, string>>({});
   // Attribution for the AI auto-title currently shown (null until an AI title lands).
   const [titleAttribution, setTitleAttribution] = useState<AiAttributionData | null>(null);
-  // Highlights saved from the embedded Wikipedia reader, keyed by node id (session-only).
-  const [, setHighlights] = useState<Record<string, string[]>>({});
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
   const [startedAt] = useState(() => Date.now());
@@ -406,18 +404,6 @@ export default function ExploreMap() {
     // presentIds is recomputed each render; track membership via present.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selectedId, spineIds, addHop, handleChip, present.length],
-  );
-
-  const handleHighlight = useCallback(
-    (nodeId: string, text: string) => {
-      if (!text) return;
-      setHighlights((prev) => ({
-        ...prev,
-        [nodeId]: [...(prev[nodeId] ?? []), text],
-      }));
-      flashToast("Highlight saved");
-    },
-    [flashToast],
   );
 
   // Keep the latest handleHopTo in a ref so the SSE connection (below) doesn't tear down
@@ -782,7 +768,6 @@ export default function ExploreMap() {
             onChip={handleChip}
             onClose={() => setSelectedId(null)}
             onHopTo={handleHopTo}
-            onHighlight={handleHighlight}
           />
         ) : null}
       </AnimatePresence>
