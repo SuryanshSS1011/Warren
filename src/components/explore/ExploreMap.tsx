@@ -485,31 +485,60 @@ export default function ExploreMap() {
     return () => clearTimeout(t);
   }, [buildSnapshot, nodes.length]);
 
+  // Share = ensure this session is saved, THEN publish it. Warrens are private by default
+  // (PRODUCT_PLAN §1.5), so an explicit Share is intent to make this trail public — otherwise
+  // the copied link would 404 for everyone but the author. Reuses the autosaved session row
+  // (warrenIdRef) when present so Share doesn't spawn a duplicate warren.
   const handleShare = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     const snapshot = buildSnapshot();
     try {
-      const res = await fetch("/api/warren", {
+      // 1) Make sure the warren exists and get its id — prefer the autosaved session row.
+      let id = warrenIdRef.current;
+      if (id) {
+        // Persist the latest state into the existing row before publishing.
+        await fetch("/api/warren", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, snapshot }),
+        });
+      } else {
+        const res = await fetch("/api/warren", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(snapshot),
+        });
+        const data = (await res.json()) as { id?: string; error?: string };
+        if (res.status === 503) {
+          flashToast("Sharing needs Supabase keys — saved nothing yet.");
+          return;
+        }
+        if (!res.ok || !data.id) {
+          flashToast(data.error ? `Couldn't share: ${data.error}` : "Couldn't share.");
+          return;
+        }
+        id = data.id;
+        warrenIdRef.current = id;
+      }
+
+      // 2) Publish so the shared link is viewable by others.
+      const pub = await fetch(`/api/warren/${id}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(snapshot),
+        body: JSON.stringify({ isPublic: true }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (res.status === 503) {
-        flashToast("Sharing needs Supabase keys — saved nothing yet.");
+      if (!pub.ok) {
+        flashToast("Saved privately — couldn't publish just now, try Share again.");
         return;
       }
-      if (!res.ok || !data.url) {
-        flashToast(data.error ? `Couldn't share: ${data.error}` : "Couldn't share.");
-        return;
-      }
-      const full = `${window.location.origin}${data.url}`;
+
+      const full = `${window.location.origin}/w/${id}`;
       try {
         await navigator.clipboard.writeText(full);
-        flashToast("Share link copied to clipboard ✦");
+        flashToast("Published — share link copied to clipboard ✦");
       } catch {
-        flashToast(`Shared: ${full}`);
+        flashToast(`Published: ${full}`);
       }
     } catch {
       flashToast("Couldn't reach the server.");
@@ -643,8 +672,13 @@ export default function ExploreMap() {
         <button className={styles.ctl} onClick={handleExport}>
           ↓ Save
         </button>
-        <button className={styles.ctl} onClick={handleShare} disabled={saving}>
-          {saving ? "Sharing…" : "↗ Share"}
+        <button
+          className={styles.ctl}
+          onClick={handleShare}
+          disabled={saving}
+          title="Publish this warren and copy a public share link"
+        >
+          {saving ? "Publishing…" : "↗ Share"}
         </button>
         <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
           ◫ Gallery
