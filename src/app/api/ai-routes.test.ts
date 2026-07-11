@@ -10,6 +10,10 @@ vi.mock("@/lib/ai/connective-tissue", () => ({ generateConnectiveTissueAttribute
 vi.mock("@/lib/ai/auto-title", () => ({ generateAutoTitleAttributed }));
 vi.mock("@/lib/ai/narrative", () => ({ generatePathNarrativeAttributed }));
 
+// The rate-limit guard; by default it proceeds (returns null). A test overrides it to 429.
+const checkAiRateLimit = vi.hoisted(() => vi.fn<() => Promise<unknown>>(async () => null));
+vi.mock("@/lib/ai/guard", () => ({ checkAiRateLimit }));
+
 // A representative attribution stamp for mocked AI results.
 const stamp = (sources: string[]) => ({
   generated: true as const,
@@ -34,6 +38,8 @@ beforeEach(() => {
   generateConnectiveTissueAttributed.mockReset();
   generateAutoTitleAttributed.mockReset();
   generatePathNarrativeAttributed.mockReset();
+  checkAiRateLimit.mockReset();
+  checkAiRateLimit.mockResolvedValue(null); // proceed by default
 });
 
 describe("POST /api/bridge", () => {
@@ -69,6 +75,16 @@ describe("POST /api/bridge", () => {
       postReq("http://x/api/bridge", { from: { title: "A" }, to: { title: "B" } }),
     );
     expect(res.status).toBe(429);
+  });
+
+  it("short-circuits with the guard's 429 before calling the AI (rate limited)", async () => {
+    const { NextResponse } = await import("next/server");
+    checkAiRateLimit.mockResolvedValue(NextResponse.json({ error: "quota" }, { status: 429 }));
+    const res = await bridgePOST(
+      postReq("http://x/api/bridge", { from: { title: "A" }, to: { title: "B" } }),
+    );
+    expect(res.status).toBe(429);
+    expect(generateConnectiveTissueAttributed).not.toHaveBeenCalled();
   });
 });
 
