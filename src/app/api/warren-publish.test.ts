@@ -17,14 +17,15 @@ vi.mock("next/headers", () => ({
 
 import { POST } from "./warren/[id]/publish/route";
 
+const WARREN_ID = "11111111-1111-4111-8111-111111111111";
 function req(body: unknown, raw = false) {
-  return new NextRequest("http://x/api/warren/abc/publish", {
+  return new NextRequest(`http://x/api/warren/${WARREN_ID}/publish`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: raw ? (body as string) : JSON.stringify(body),
   });
 }
-const ctx = { params: Promise.resolve({ id: "abc" }) };
+const ctx = { params: Promise.resolve({ id: WARREN_ID }) };
 
 beforeEach(() => {
   setWarrenVisibility.mockReset();
@@ -38,9 +39,9 @@ describe("POST /api/warren/[id]/publish", () => {
     setWarrenVisibility.mockResolvedValue({ ok: true });
     const res = await POST(req({ isPublic: true }), ctx);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ id: "abc", isPublic: true });
+    expect(await res.json()).toEqual({ id: WARREN_ID, isPublic: true });
     expect(setWarrenVisibility).toHaveBeenCalledWith(
-      "abc",
+      WARREN_ID,
       { anonId: "owner-anon", userId: undefined },
       true,
     );
@@ -53,7 +54,7 @@ describe("POST /api/warren/[id]/publish", () => {
     const res = await POST(req({ isPublic: true }), ctx);
     expect(res.status).toBe(200);
     expect(setWarrenVisibility).toHaveBeenCalledWith(
-      "abc",
+      WARREN_ID,
       { anonId: undefined, userId: "user-1" },
       true,
     );
@@ -76,6 +77,17 @@ describe("POST /api/warren/[id]/publish", () => {
   it("400s on an invalid body", async () => {
     const res = await POST(req({ nope: 1 }), ctx);
     expect(res.status).toBe(400);
+  });
+
+  it("400s on a non-UUID warren id", async () => {
+    const badReq = new NextRequest("http://x/api/warren/not-a-uuid/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ isPublic: true }),
+    });
+    const res = await POST(badReq, { params: Promise.resolve({ id: "not-a-uuid" }) });
+    expect(res.status).toBe(400);
+    expect(setWarrenVisibility).not.toHaveBeenCalled();
   });
 
   it("400s on malformed json", async () => {

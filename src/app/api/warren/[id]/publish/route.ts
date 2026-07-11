@@ -13,6 +13,11 @@ const Body = z.object({ isPublic: z.boolean() });
 // default (PRODUCT_PLAN §1.5); this is the explicit opt-in publish action.
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  // Fail fast on a non-UUID id (a bad id would just miss and 404 anyway; this is clearer
+  // and matches the validation style on the autosave route).
+  if (!z.uuid().safeParse(id).success) {
+    return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  }
 
   let body: unknown;
   try {
