@@ -10,6 +10,7 @@ import { bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
 import { createPersistentCache } from "@/lib/explore/persistent-cache";
 import type { AiAttribution as AiAttributionData } from "@/lib/attribution";
+import { trackEvent } from "@/lib/analytics/events";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
@@ -258,6 +259,7 @@ export default function ExploreMap() {
     setSpineIds([id]);
     setNewestId(id);
     setSelectedId(id);
+    trackEvent("session_start");
   }, []);
 
   // elapsed timer
@@ -477,7 +479,11 @@ export default function ExploreMap() {
         });
         if (!res.ok) return; // 503 unconfigured / transient — stay silent, retry next change
         const data = (await res.json()) as { id?: string };
-        if (data.id) warrenIdRef.current = data.id;
+        if (data.id) {
+          const firstSave = !warrenIdRef.current;
+          warrenIdRef.current = data.id;
+          if (firstSave) trackEvent("warren_saved");
+        }
       } catch {
         /* offline — autosave is best-effort */
       }
@@ -532,6 +538,8 @@ export default function ExploreMap() {
         flashToast("Saved privately — couldn't publish just now, try Share again.");
         return;
       }
+      trackEvent("warren_published");
+      trackEvent("warren_shared");
 
       const full = `${window.location.origin}/w/${id}`;
       try {
