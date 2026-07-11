@@ -895,6 +895,20 @@
   margin-top: 8px;
   flex-wrap: wrap;
 }
+.exportMenu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.exportLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
 .publishState {
   font-family: var(--font-mono);
   font-size: 9px;

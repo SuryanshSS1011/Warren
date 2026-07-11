@@ -8,6 +8,7 @@ import { hueOf } from "@/lib/explore/hue";
 import type { SavedWarren } from "@/lib/explore/warren-snapshot";
 import CanvasGraphEngine from "./CanvasGraphEngine";
 import { PublishToggle } from "./PublishToggle";
+import { ExportMenu } from "./ExportMenu";
 import Starfield from "./Starfield";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
 
@@ -114,7 +115,10 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
           <div className={styles.tcLabel}>now replaying</div>
           <div className={styles.tcTitle}>{warren.title}</div>
           {warren.isOwner ? (
-            <PublishToggle id={warren.id} initialPublic={warren.isPublic} />
+            <>
+              <PublishToggle id={warren.id} initialPublic={warren.isPublic} />
+              <ExportMenu warrenId={warren.id} />
+            </>
           ) : null}
         </div>
       </header>
