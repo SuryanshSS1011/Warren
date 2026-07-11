@@ -1,0 +1,154 @@
+.page {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+  color: var(--ink);
+}
+.header {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 48px 24px 8px;
+  text-align: center;
+}
+.back {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 13px;
+  color: var(--ink-dim);
+  text-decoration: none;
+  margin-bottom: 28px;
+}
+.back:hover {
+  color: var(--ink);
+}
+.h1 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 34px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+.sub {
+  font-size: 14.5px;
+  color: var(--ink-dim);
+  margin: 0 auto;
+  max-width: 520px;
+  line-height: 1.6;
+}
+.grid {
+  flex: 1;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklch, var(--ink-faint), transparent 78%);
+  background: var(--bg-1);
+  padding: 24px 22px;
+  min-height: 420px;
+}
+.card[data-featured="true"] {
+  border-color: color-mix(in oklch, var(--accent), transparent 45%);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent), transparent 70%),
+    0 8px 40px color-mix(in oklch, var(--accent), transparent 88%);
+}
+.cardHead {
+  border-bottom: 1px solid color-mix(in oklch, var(--ink-faint), transparent 82%);
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+.planName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-hi);
+  margin: 0 0 6px;
+}
+.price {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.tagline {
+  font-size: 13px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.features li {
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.4;
+  padding-left: 20px;
+  position: relative;
+}
+.features li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: color-mix(in oklch, var(--accent-hi), transparent 20%);
+}
+.cardFoot {
+  margin-top: auto;
+}
+.currentBadge {
+  display: inline-block;
+  font-family: var(--font-space-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  padding: 10px 0;
+}
+.freeCta,
+.upgradeBtn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 12px 16px;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 40%);
+  background: color-mix(in oklch, var(--accent), transparent 82%);
+  color: var(--accent-hi);
+  transition: background 0.15s ease;
+}
+.freeCta:hover,
+.upgradeBtn:hover {
+  background: color-mix(in oklch, var(--accent), transparent 72%);
+}
+.upgradeBtn:disabled {
+  opacity: 0.6;
+}
+.upgradeWrap {
+  width: 100%;
+}
+.upgradeError {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--accent-hi);
+  text-align: center;
+}

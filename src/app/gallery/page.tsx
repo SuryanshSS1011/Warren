@@ -78,6 +78,9 @@ export default async function GalleryPage() {
           </div>
         </Link>
         <div className={styles.navRight}>
+          <Link href="/pricing" className={styles.navLink}>
+            Pricing
+          </Link>
           <Link href={user ? "/my" : "/signin"} className={styles.navLink}>
             {user ? "My warrens" : "Sign in"}
           </Link>

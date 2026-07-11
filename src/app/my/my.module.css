@@ -35,9 +35,39 @@
   letter-spacing: -0.01em;
 }
 .sub {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 13px;
   color: var(--ink-faint);
+}
+.subRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.tierChip {
+  font-family: var(--font-space-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklch, var(--ink-faint), transparent 70%);
+  color: var(--ink-dim);
+}
+.tierChip[data-tier="pro"],
+.tierChip[data-tier="researcher"] {
+  color: color-mix(in oklch, var(--accent-hi), var(--ink-faint) 15%);
+  border-color: color-mix(in oklch, var(--accent), transparent 60%);
+}
+.upgradeLink {
+  font-size: 12.5px;
+  color: var(--accent-hi);
+  text-decoration: none;
+}
+.upgradeLink:hover {
+  text-decoration: underline;
 }
 .main {
   flex: 1;

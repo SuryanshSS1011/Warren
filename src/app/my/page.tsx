@@ -5,6 +5,8 @@ import MiniTrail from "@/components/explore/MiniTrail";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { getUser } from "@/lib/supabase/auth";
+import { getProfile } from "@/lib/billing/profile";
+import { tierDisplay } from "@/lib/billing/entitlements";
 import { listWarrensForOwner } from "@/lib/explore/repository";
 import styles from "./my.module.css";
 
@@ -12,11 +14,21 @@ export const metadata: Metadata = {
   title: "My warrens — Warren",
 };
 
+const TIER_LABEL: Record<string, string> = {
+  free: "Free",
+  pro: "Pro",
+  researcher: "Researcher",
+};
+
 export default async function MyWarrensPage() {
   const user = await getUser();
   if (!user) redirect("/signin");
 
-  const warrens = await listWarrensForOwner(user.id);
+  const [warrens, profile] = await Promise.all([
+    listWarrensForOwner(user.id),
+    getProfile(user.id),
+  ]);
+  const { tier, onTrial, trialDaysLeft } = tierDisplay(profile);
 
   return (
     <div className={styles.page}>
@@ -28,7 +40,18 @@ export default async function MyWarrensPage() {
           <h1 className={styles.h1}>My warrens</h1>
           <SignOutButton />
         </div>
-        <p className={styles.sub}>{user.email}</p>
+        <div className={styles.subRow}>
+          <p className={styles.sub}>{user.email}</p>
+          <span className={styles.tierChip} data-tier={tier}>
+            {TIER_LABEL[tier] ?? tier}
+            {onTrial ? ` · trial (${trialDaysLeft}d left)` : ""}
+          </span>
+          {tier !== "researcher" ? (
+            <Link href="/pricing" className={styles.upgradeLink}>
+              {tier === "free" ? "Upgrade" : "Compare plans"}
+            </Link>
+          ) : null}
+        </div>
       </header>
 
       <main className={styles.main}>
