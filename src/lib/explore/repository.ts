@@ -108,21 +108,26 @@ export async function saveWarren(
   return { id: warrenId };
 }
 
+export type Viewer = { anonId?: string; userId?: string };
+
 // React.cache dedupes the fetch across generateMetadata + page + opengraph-image.
-// A warren is visible if it's published (is_public) OR the viewer owns it (matching
-// anon_id) — so an author can always see and share-preview their own private trail.
+// A warren is visible if it's published (is_public) OR the viewer owns it — ownership is by
+// account (owner_id === userId) OR by the anonymous cookie that created it (anon_id). So both
+// an author's account and the anon session that made a trail can always see and publish it.
 export const loadWarren = cache(
-  async (id: string, viewerAnonId?: string): Promise<SavedWarren | null> => {
+  async (id: string, viewer?: Viewer): Promise<SavedWarren | null> => {
     const db = getAdminClient();
     if (!db) return null;
 
     const { data: w, error } = await db
       .from("warren")
-      .select("id, title, spine, started_at, stats, is_public, anon_id")
+      .select("id, title, spine, started_at, stats, is_public, anon_id, owner_id")
       .eq("id", id)
       .maybeSingle();
     if (error || !w) return null;
-    const isOwner = !!viewerAnonId && w.anon_id === viewerAnonId;
+    const isOwner =
+      (!!viewer?.anonId && w.anon_id === viewer.anonId) ||
+      (!!viewer?.userId && w.owner_id === viewer.userId);
     if (!w.is_public && !isOwner) return null;
 
     const [{ data: nodes }, { data: edges }] = await Promise.all([
@@ -154,19 +159,54 @@ export const loadWarren = cache(
   },
 );
 
-/** Flip a warren's visibility. Only the owning anon may publish/unpublish it. */
+/**
+ * Claim all warrens created anonymously under `anonId` for a newly-signed-in `ownerId`.
+ * Called from the auth callback so an anonymous user keeps everything on sign-up (Phase 1,
+ * auto-claim). Idempotent: re-running only affects rows still matching this anon_id that
+ * aren't already owned. `anon_id` is retained for continuity (the cookie still resolves as
+ * owner during the same session). Returns the number of warrens claimed.
+ */
+export async function claimAnonWarrens(anonId: string, ownerId: string): Promise<number> {
+  const db = getAdminClient();
+  if (!db) return 0;
+  if (!anonId || !ownerId) return 0;
+  const { data, error } = await db
+    .from("warren")
+    .update({ owner_id: ownerId })
+    .eq("anon_id", anonId)
+    .is("owner_id", null)
+    .select("id");
+  if (error) throw new Error(`claim warrens: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+/**
+ * Flip a warren's visibility. Only the owner may publish/unpublish — ownership is by account
+ * (owner_id === userId) OR by the anonymous cookie that created it (anon_id). Returns ok:false
+ * when the warren doesn't exist or the viewer doesn't own it.
+ */
 export async function setWarrenVisibility(
   id: string,
-  anonId: string,
+  viewer: Viewer,
   isPublic: boolean,
 ): Promise<{ ok: boolean }> {
   const db = getAdminClient();
   if (!db) throw new PersistenceUnavailableError();
+  if (!viewer.anonId && !viewer.userId) return { ok: false };
+
+  // Build an ownership predicate matching either id. Supabase .or() takes a comma list.
+  const ownership = [
+    viewer.userId ? `owner_id.eq.${viewer.userId}` : null,
+    viewer.anonId ? `anon_id.eq.${viewer.anonId}` : null,
+  ]
+    .filter(Boolean)
+    .join(",");
+
   const { data, error } = await db
     .from("warren")
     .update({ is_public: isPublic })
     .eq("id", id)
-    .eq("anon_id", anonId)
+    .or(ownership)
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`set visibility: ${error.message}`);
@@ -216,6 +256,54 @@ export async function listPublicWarrens(limit = 24): Promise<WarrenCard[]> {
     title: w.title ?? "Untitled warren",
     stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
     createdAt: new Date(w.created_at).getTime(),
+    trail: ((w.spine ?? []) as string[])
+      .map((nid) => nodeBy.get(`${w.id}:${nid}`))
+      .filter(Boolean) as { title: string; category: string }[],
+  }));
+}
+
+/** A My-Warrens row: a gallery card plus the private/public flag. */
+export type OwnedWarrenCard = WarrenCard & { isPublic: boolean };
+
+/**
+ * All warrens owned by an account (owner_id), newest first — for the "My warrens" page.
+ * Includes private ones (only the owner sees this list). Returns [] without Supabase.
+ */
+export async function listWarrensForOwner(
+  ownerId: string,
+  limit = 60,
+): Promise<OwnedWarrenCard[]> {
+  const db = getAdminClient();
+  if (!db || !ownerId) return [];
+
+  const { data: warrens, error } = await db
+    .from("warren")
+    .select("id, title, spine, stats, created_at, is_public")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !warrens?.length) return [];
+
+  const ids = warrens.map((w) => w.id);
+  const { data: nodes } = await db
+    .from("node")
+    .select("warren_id, id, title, category")
+    .in("warren_id", ids);
+
+  const nodeBy = new Map<string, { title: string; category: string }>();
+  for (const n of nodes ?? []) {
+    nodeBy.set(`${n.warren_id}:${n.id}`, {
+      title: n.title,
+      category: n.category ?? UNCATEGORIZED,
+    });
+  }
+
+  return warrens.map((w) => ({
+    id: w.id,
+    title: w.title ?? "Untitled warren",
+    stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
+    createdAt: new Date(w.created_at).getTime(),
+    isPublic: !!w.is_public,
     trail: ((w.spine ?? []) as string[])
       .map((nid) => nodeBy.get(`${w.id}:${nid}`))
       .filter(Boolean) as { title: string; category: string }[],
