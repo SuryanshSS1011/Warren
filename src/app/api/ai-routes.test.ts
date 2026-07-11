@@ -2,13 +2,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // Mock the AI lib layer so routes are tested in isolation from real providers.
-const generateConnectiveTissue = vi.hoisted(() => vi.fn());
-const generateAutoTitle = vi.hoisted(() => vi.fn());
+const generateConnectiveTissueAttributed = vi.hoisted(() => vi.fn());
+const generateAutoTitleAttributed = vi.hoisted(() => vi.fn());
 const generatePathNarrativeAttributed = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/ai/connective-tissue", () => ({ generateConnectiveTissue }));
-vi.mock("@/lib/ai/auto-title", () => ({ generateAutoTitle }));
+vi.mock("@/lib/ai/connective-tissue", () => ({ generateConnectiveTissueAttributed }));
+vi.mock("@/lib/ai/auto-title", () => ({ generateAutoTitleAttributed }));
 vi.mock("@/lib/ai/narrative", () => ({ generatePathNarrativeAttributed }));
+
+// A representative attribution stamp for mocked AI results.
+const stamp = (sources: string[]) => ({
+  generated: true as const,
+  model: "test-model",
+  license: { id: "CC-BY-SA-4.0", name: "CC BY-SA 4.0", url: "https://cc" },
+  sources: sources.map((t) => ({ title: t, url: `https://en.wikipedia.org/wiki/${t}` })),
+});
 
 import { POST as bridgePOST } from "./bridge/route";
 import { POST as titlePOST } from "./title/route";
@@ -23,25 +31,31 @@ function postReq(url: string, body: unknown, raw = false) {
 }
 
 beforeEach(() => {
-  generateConnectiveTissue.mockReset();
-  generateAutoTitle.mockReset();
+  generateConnectiveTissueAttributed.mockReset();
+  generateAutoTitleAttributed.mockReset();
   generatePathNarrativeAttributed.mockReset();
 });
 
 describe("POST /api/bridge", () => {
-  it("returns the bridge sentence for a valid body", async () => {
-    generateConnectiveTissue.mockResolvedValue("a curious leap");
+  it("returns the bridge sentence AND attribution for a valid body", async () => {
+    generateConnectiveTissueAttributed.mockResolvedValue({
+      text: "a curious leap",
+      attribution: stamp(["A", "B"]),
+    });
     const res = await bridgePOST(
       postReq("http://x/api/bridge", { from: { title: "A" }, to: { title: "B" } }),
     );
     expect(res.status).toBe(200);
-    expect((await res.json()).bridge).toBe("a curious leap");
+    const body = await res.json();
+    expect(body.bridge).toBe("a curious leap");
+    expect(body.attribution.generated).toBe(true);
+    expect(body.attribution.sources.map((s: { title: string }) => s.title)).toEqual(["A", "B"]);
   });
 
   it("400s on invalid body", async () => {
     const res = await bridgePOST(postReq("http://x/api/bridge", { from: {} }));
     expect(res.status).toBe(400);
-    expect(generateConnectiveTissue).not.toHaveBeenCalled();
+    expect(generateConnectiveTissueAttributed).not.toHaveBeenCalled();
   });
 
   it("400s on malformed json", async () => {
@@ -50,7 +64,7 @@ describe("POST /api/bridge", () => {
   });
 
   it("maps a provider quota error to 429", async () => {
-    generateConnectiveTissue.mockRejectedValue(new Error("429 rate limit"));
+    generateConnectiveTissueAttributed.mockRejectedValue(new Error("429 rate limit"));
     const res = await bridgePOST(
       postReq("http://x/api/bridge", { from: { title: "A" }, to: { title: "B" } }),
     );
@@ -59,11 +73,16 @@ describe("POST /api/bridge", () => {
 });
 
 describe("POST /api/title", () => {
-  it("returns a title for a valid path", async () => {
-    generateAutoTitle.mockResolvedValue("The A to B Run");
+  it("returns a title AND attribution for a valid path", async () => {
+    generateAutoTitleAttributed.mockResolvedValue({
+      text: "The A to B Run",
+      attribution: stamp(["A", "B"]),
+    });
     const res = await titlePOST(postReq("http://x/api/title", { path: ["A", "B"] }));
     expect(res.status).toBe(200);
-    expect((await res.json()).title).toBe("The A to B Run");
+    const body = await res.json();
+    expect(body.title).toBe("The A to B Run");
+    expect(body.attribution.generated).toBe(true);
   });
 
   it("400s on an empty path", async () => {
