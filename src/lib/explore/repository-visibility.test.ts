@@ -55,32 +55,49 @@ beforeEach(() => {
 });
 
 describe("setWarrenVisibility", () => {
-  it("scopes the update to id AND ownership (anon or account) and reports ok on a hit", async () => {
-    state.updateResult = { data: { id: "w1" }, error: null };
-    const r = await setWarrenVisibility("w1", { anonId: "anon-1", userId: "user-1" }, true);
+  it("publishes when the account owner matches (owner_id), never interpolating input", async () => {
+    state.warrenRow = { id: "w1", owner_id: "user-1", anon_id: "anon-x" };
+    const r = await setWarrenVisibility("w1", { userId: "user-1" }, true);
     expect(r.ok).toBe(true);
-    expect(state.captured.id).toBe("w1");
+    // The update ran with the new visibility, scoped by id only (ownership already verified).
     expect(state.captured.__update).toEqual({ is_public: true });
-    // ownership predicate covers both owner_id and anon_id
-    expect(state.captured.__or).toContain("owner_id.eq.user-1");
-    expect(state.captured.__or).toContain("anon_id.eq.anon-1");
+    expect(state.captured.id).toBe("w1");
+    // No PostgREST .or() filter string was built from user input.
+    expect(state.captured.__or).toBeUndefined();
   });
 
-  it("builds an anon-only predicate when there's no account", async () => {
-    state.updateResult = { data: { id: "w1" }, error: null };
-    await setWarrenVisibility("w1", { anonId: "anon-1" }, true);
-    expect(state.captured.__or).toBe("anon_id.eq.anon-1");
+  it("publishes when the anon cookie matches (anon_id)", async () => {
+    state.warrenRow = { id: "w1", owner_id: null, anon_id: "anon-1" };
+    const r = await setWarrenVisibility("w1", { anonId: "anon-1" }, true);
+    expect(r.ok).toBe(true);
   });
 
-  it("reports ok:false when no owned row matched", async () => {
-    state.updateResult = { data: null, error: null };
-    const r = await setWarrenVisibility("w1", { anonId: "not-owner" }, false);
+  it("reports ok:false when the viewer does not own the row (no update runs)", async () => {
+    state.warrenRow = { id: "w1", owner_id: "someone", anon_id: "someone-else" };
+    const r = await setWarrenVisibility("w1", { anonId: "not-owner", userId: "not-owner" }, false);
     expect(r.ok).toBe(false);
+    expect(state.captured.__update).toBeUndefined();
+  });
+
+  it("reports ok:false when the warren does not exist", async () => {
+    state.warrenRow = null;
+    expect((await setWarrenVisibility("w1", { anonId: "anon-1" }, true)).ok).toBe(false);
   });
 
   it("returns ok:false with no viewer at all", async () => {
     const r = await setWarrenVisibility("w1", {}, true);
     expect(r.ok).toBe(false);
+  });
+
+  it("SECURITY: a crafted anon_id cannot match a warren it doesn't own", async () => {
+    // The row is owned by a real anon; the attacker supplies a cookie value crafted to look
+    // like an injected PostgREST predicate. With fetch-then-compare it simply !== the real
+    // anon_id, so no update happens.
+    state.warrenRow = { id: "w1", owner_id: null, anon_id: "real-owner-anon" };
+    const attacker = "x,is_public.eq.false";
+    const r = await setWarrenVisibility("w1", { anonId: attacker }, true);
+    expect(r.ok).toBe(false);
+    expect(state.captured.__update).toBeUndefined();
   });
 });
 
