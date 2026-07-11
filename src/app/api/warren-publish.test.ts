@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const setWarrenVisibility = vi.hoisted(() => vi.fn());
+const getUser = vi.hoisted(() => vi.fn());
 const cookieStore = vi.hoisted(() => ({ value: "owner-anon" as string | undefined }));
 
 vi.mock("@/lib/explore/repository", () => ({
@@ -9,6 +10,7 @@ vi.mock("@/lib/explore/repository", () => ({
   // Route imports this to distinguish 503; a real class instance isn't needed here.
   PersistenceUnavailableError: class PersistenceUnavailableError extends Error {},
 }));
+vi.mock("@/lib/supabase/auth", () => ({ getUser }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => (cookieStore.value ? { value: cookieStore.value } : undefined) }),
 }));
@@ -26,20 +28,40 @@ const ctx = { params: Promise.resolve({ id: "abc" }) };
 
 beforeEach(() => {
   setWarrenVisibility.mockReset();
+  getUser.mockReset();
+  getUser.mockResolvedValue(null); // anonymous by default
   cookieStore.value = "owner-anon";
 });
 
 describe("POST /api/warren/[id]/publish", () => {
-  it("publishes when the owner requests it", async () => {
+  it("publishes when the anon owner requests it", async () => {
     setWarrenVisibility.mockResolvedValue({ ok: true });
     const res = await POST(req({ isPublic: true }), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "abc", isPublic: true });
-    expect(setWarrenVisibility).toHaveBeenCalledWith("abc", "owner-anon", true);
+    expect(setWarrenVisibility).toHaveBeenCalledWith(
+      "abc",
+      { anonId: "owner-anon", userId: undefined },
+      true,
+    );
   });
 
-  it("401s when there is no session cookie", async () => {
+  it("publishes for a signed-in account even without an anon cookie", async () => {
     cookieStore.value = undefined;
+    getUser.mockResolvedValue({ id: "user-1" });
+    setWarrenVisibility.mockResolvedValue({ ok: true });
+    const res = await POST(req({ isPublic: true }), ctx);
+    expect(res.status).toBe(200);
+    expect(setWarrenVisibility).toHaveBeenCalledWith(
+      "abc",
+      { anonId: undefined, userId: "user-1" },
+      true,
+    );
+  });
+
+  it("401s when there is neither a session cookie nor an account", async () => {
+    cookieStore.value = undefined;
+    getUser.mockResolvedValue(null);
     const res = await POST(req({ isPublic: true }), ctx);
     expect(res.status).toBe(401);
     expect(setWarrenVisibility).not.toHaveBeenCalled();

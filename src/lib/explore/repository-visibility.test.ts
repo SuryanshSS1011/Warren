@@ -16,6 +16,14 @@ function chain() {
     state.captured[col] = val;
     return c;
   });
+  c.or = vi.fn((expr: string) => {
+    state.captured.__or = expr;
+    return c;
+  });
+  c.is = vi.fn((col: string, val: unknown) => {
+    state.captured[`is:${col}`] = val;
+    return c;
+  });
   c.update = vi.fn((patch: unknown) => {
     state.captured.__update = patch;
     return c;
@@ -26,6 +34,9 @@ function chain() {
     if (state.captured.__update !== undefined) return state.updateResult;
     return { data: state.warrenRow, error: null };
   });
+  // Make the chain awaitable (Supabase builders are thenable) so a query that ends at
+  // .select() without .maybeSingle() (e.g. claimAnonWarrens) resolves to the queued result.
+  c.then = (resolve: (v: unknown) => unknown) => resolve(state.updateResult);
   return c;
 }
 
@@ -34,7 +45,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   getAdminClient: () => ({ from }),
 }));
 
-import { setWarrenVisibility, loadWarren } from "./repository";
+import { setWarrenVisibility, loadWarren, claimAnonWarrens } from "./repository";
 
 beforeEach(() => {
   state.warrenRow = null;
@@ -44,18 +55,31 @@ beforeEach(() => {
 });
 
 describe("setWarrenVisibility", () => {
-  it("scopes the update to id AND anon_id (owner-only) and reports ok on a hit", async () => {
+  it("scopes the update to id AND ownership (anon or account) and reports ok on a hit", async () => {
     state.updateResult = { data: { id: "w1" }, error: null };
-    const r = await setWarrenVisibility("w1", "anon-1", true);
+    const r = await setWarrenVisibility("w1", { anonId: "anon-1", userId: "user-1" }, true);
     expect(r.ok).toBe(true);
     expect(state.captured.id).toBe("w1");
-    expect(state.captured.anon_id).toBe("anon-1");
     expect(state.captured.__update).toEqual({ is_public: true });
+    // ownership predicate covers both owner_id and anon_id
+    expect(state.captured.__or).toContain("owner_id.eq.user-1");
+    expect(state.captured.__or).toContain("anon_id.eq.anon-1");
+  });
+
+  it("builds an anon-only predicate when there's no account", async () => {
+    state.updateResult = { data: { id: "w1" }, error: null };
+    await setWarrenVisibility("w1", { anonId: "anon-1" }, true);
+    expect(state.captured.__or).toBe("anon_id.eq.anon-1");
   });
 
   it("reports ok:false when no owned row matched", async () => {
     state.updateResult = { data: null, error: null };
-    const r = await setWarrenVisibility("w1", "not-owner", false);
+    const r = await setWarrenVisibility("w1", { anonId: "not-owner" }, false);
+    expect(r.ok).toBe(false);
+  });
+
+  it("returns ok:false with no viewer at all", async () => {
+    const r = await setWarrenVisibility("w1", {}, true);
     expect(r.ok).toBe(false);
   });
 });
@@ -82,14 +106,42 @@ describe("loadWarren visibility", () => {
 
   it("hides a private warren from a non-owner", async () => {
     state.warrenRow = row({ is_public: false });
-    expect(await loadWarren("w1", "someone-else")).toBeNull();
+    expect(await loadWarren("w1", { anonId: "someone-else" })).toBeNull();
   });
 
-  it("shows a private warren to its owner and flags ownership", async () => {
+  it("shows a private warren to its anon owner and flags ownership", async () => {
     state.warrenRow = row({ is_public: false });
-    const w = await loadWarren("w1", "owner");
+    const w = await loadWarren("w1", { anonId: "owner" });
     expect(w).not.toBeNull();
     expect(w?.isOwner).toBe(true);
     expect(w?.isPublic).toBe(false);
+  });
+
+  it("shows a private warren to its account owner (owner_id match)", async () => {
+    state.warrenRow = row({ is_public: false, anon_id: null, owner_id: "user-9" });
+    const w = await loadWarren("w1", { userId: "user-9" });
+    expect(w).not.toBeNull();
+    expect(w?.isOwner).toBe(true);
+  });
+
+  it("hides a private warren from a different account", async () => {
+    state.warrenRow = row({ is_public: false, anon_id: null, owner_id: "user-9" });
+    expect(await loadWarren("w1", { userId: "other-user" })).toBeNull();
+  });
+});
+
+describe("claimAnonWarrens", () => {
+  it("claims unowned warrens matching the anon id for the account, returns the count", async () => {
+    state.updateResult = { data: [{ id: "w1" }, { id: "w2" }], error: null };
+    const n = await claimAnonWarrens("anon-1", "user-1");
+    expect(n).toBe(2);
+    expect(state.captured.__update).toEqual({ owner_id: "user-1" });
+    expect(state.captured.anon_id).toBe("anon-1");
+    expect(state.captured["is:owner_id"]).toBeNull(); // only claim rows not yet owned
+  });
+
+  it("no-ops (0) when anonId or ownerId is missing", async () => {
+    expect(await claimAnonWarrens("", "user-1")).toBe(0);
+    expect(await claimAnonWarrens("anon-1", "")).toBe(0);
   });
 });
