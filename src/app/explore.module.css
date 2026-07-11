@@ -766,6 +766,69 @@
 .aiAttribution a:hover {
   color: var(--ink);
 }
+/* Compact "AI" badge for transient/compact AI surfaces (bridge subtitle, journey title)
+   where the full footer would clutter. The flag stays always-visible; the license + source
+   links reveal in a popover on hover/focus (keyboard-accessible, not hover-only). */
+.aiBadge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.aiBadgeTrigger {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 70%);
+  background: color-mix(in oklch, var(--accent), transparent 88%);
+  color: color-mix(in oklch, var(--accent-hi), var(--ink-faint) 20%);
+  cursor: help;
+}
+.aiBadgePopover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel, rgba(20, 18, 15, 0.96));
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 78%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  letter-spacing: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.aiBadge:hover .aiBadgePopover,
+.aiBadge:focus-within .aiBadgePopover {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.aiBadgePopover a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.aiBadgeFlagRow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: color-mix(in oklch, var(--accent-hi), var(--ink-faint) 20%);
+  margin-bottom: 4px;
+}
 .narrativeSkeleton {
   display: flex;
   flex-direction: column;

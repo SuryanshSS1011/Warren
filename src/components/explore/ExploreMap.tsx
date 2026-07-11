@@ -9,9 +9,11 @@ import { liveIdFor, placeholder, resolve, upsertLive } from "@/lib/explore/artic
 import { bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
 import { createPersistentCache } from "@/lib/explore/persistent-cache";
+import type { AiAttribution as AiAttributionData } from "@/lib/attribution";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
+import { AiBadge } from "./AiBadge";
 import BurrowCard from "./BurrowCard";
 import CanvasGraphEngine from "./CanvasGraphEngine";
 import ExploreHome from "./ExploreHome";
@@ -45,8 +47,15 @@ function Logo() {
   );
 }
 
-/** A connective-tissue subtitle that fades in like a film subtitle, and out on change. */
-function Subtitle({ text }: { text: string }) {
+/** A connective-tissue subtitle that fades in like a film subtitle, and out on change.
+    Shows a compact "AI" attribution flag once the AI bridge (not the canned fallback) lands. */
+function Subtitle({
+  text,
+  attribution,
+}: {
+  text: string;
+  attribution?: AiAttributionData | null;
+}) {
   return (
     <motion.div
       className={styles.subtitle}
@@ -58,6 +67,7 @@ function Subtitle({ text }: { text: string }) {
       <span className={styles.subtitleQuote}>{"“"}</span>
       {text}
       <span className={styles.subtitleQuote}>{"”"}</span>
+      {attribution ? <AiBadge attribution={attribution} /> : null}
     </motion.div>
   );
 }
@@ -78,7 +88,11 @@ export default function ExploreMap() {
   const [spineIds, setSpineIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newestId, setNewestId] = useState<string | null>(null);
-  const [subtitle, setSubtitle] = useState<{ text: string; key: number } | null>(null);
+  const [subtitle, setSubtitle] = useState<{
+    text: string;
+    key: number;
+    attribution?: AiAttributionData | null;
+  } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [viewportW, setViewportW] = useState<number>(MOBILE_BP + 1);
   const [listOpen, setListOpen] = useState(false);
@@ -88,6 +102,8 @@ export default function ExploreMap() {
   const [saving, setSaving] = useState(false);
   // AI auto-titles keyed by "firstId>lastId"; overlays the canned title when present.
   const [aiTitles, setAiTitles] = useState<Record<string, string>>({});
+  // Attribution for the AI auto-title currently shown (null until an AI title lands).
+  const [titleAttribution, setTitleAttribution] = useState<AiAttributionData | null>(null);
   // Highlights saved from the embedded Wikipedia reader, keyed by node id (session-only).
   const [, setHighlights] = useState<Record<string, string[]>>({});
 
@@ -122,7 +138,7 @@ export default function ExploreMap() {
       const to = resolve(toId) ?? placeholder(toId);
       if (!from) return;
       try {
-        const { text: ai } = await fetchBridge(
+        const { text: ai, attribution } = await fetchBridge(
           { title: from.title, description: from.blurb },
           { title: to.title, description: to.blurb },
         );
@@ -132,8 +148,9 @@ export default function ExploreMap() {
             e.source === fromId && e.target === toId ? { ...e, bridge: ai } : e,
           ),
         );
-        // only swap the visible subtitle if it's still showing this hop's fallback
-        setSubtitle((s) => (s && s.text === fallback ? { ...s, text: ai } : s));
+        // only swap the visible subtitle if it's still showing this hop's fallback, and
+        // attach the AI attribution so the subtitle can show its "AI" flag.
+        setSubtitle((s) => (s && s.text === fallback ? { ...s, text: ai, attribution } : s));
       } catch {
         // keep the canned bridge — already shown
       }
@@ -295,10 +312,11 @@ export default function ExploreMap() {
     let cancelled = false;
     const titles = spineIds.map((id) => resolve(id)?.title).filter(Boolean) as string[];
     fetchTitle(titles)
-      .then(({ text: t }) => {
+      .then(({ text: t, attribution }) => {
         if (cancelled || !t) return;
         titleCache.set(titleKey, t);
         setAiTitles((m) => ({ ...m, [titleKey]: t }));
+        setTitleAttribution(attribution);
       })
       .catch(() => {});
     return () => {
@@ -307,7 +325,10 @@ export default function ExploreMap() {
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [titleKey]);
-  const autoTitle = (titleKey && aiTitles[titleKey]) || cannedTitle;
+  const aiTitle = titleKey ? aiTitles[titleKey] : undefined;
+  const autoTitle = aiTitle || cannedTitle;
+  // Only flag the title when it's the AI-generated one (not the canned fallback).
+  const showTitleBadge = Boolean(aiTitle) && Boolean(titleAttribution);
 
   const hops = Math.max(0, spineIds.length - 1);
   const cats = new Set(nodes.map((n) => n.category)).size;
@@ -546,7 +567,14 @@ export default function ExploreMap() {
         </div>
         <div className={styles.titlecard}>
           <div className={styles.tcLabel}>your warren</div>
-          <div className={styles.tcTitle}>{autoTitle}</div>
+          <div className={styles.tcTitle}>
+            {autoTitle}
+            {showTitleBadge ? (
+              <span data-export-hide="true">
+                <AiBadge attribution={titleAttribution} />
+              </span>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -694,7 +722,9 @@ export default function ExploreMap() {
 
       {/* connective-tissue subtitle */}
       <AnimatePresence mode="wait">
-        {subtitle ? <Subtitle key={subtitle.key} text={subtitle.text} /> : null}
+        {subtitle ? (
+          <Subtitle key={subtitle.key} text={subtitle.text} attribution={subtitle.attribution} />
+        ) : null}
       </AnimatePresence>
 
       {/* burrow card */}
