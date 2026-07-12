@@ -9,7 +9,9 @@ import type { SavedWarren } from "@/lib/explore/warren-snapshot";
 import CanvasGraphEngine from "./CanvasGraphEngine";
 import { PublishToggle } from "./PublishToggle";
 import { ExportMenu } from "./ExportMenu";
+import { BadgeRow } from "./BadgeRow";
 import Starfield from "./Starfield";
+import type { WarrenShape } from "@/lib/explore/badges";
 import type { GraphApi, GraphEdge, GraphNode } from "./types";
 
 const STEP_MS = 1800;
@@ -23,6 +25,18 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
     const branchIds = warren.nodes.map((n) => n.id).filter((id) => !spineOrder.includes(id));
     return [...spineOrder, ...branchIds];
   }, [warren.nodes, spineOrder]);
+
+  // Badges earned by this warren's shape (pure, from stats + graph).
+  const shape: WarrenShape = useMemo(() => {
+    const branches = warren.nodes.filter((n) => !spineOrder.includes(n.id)).length;
+    return {
+      hops: Math.max(0, warren.spine.length - 1),
+      categories: warren.stats.categories,
+      nodes: warren.nodes.length,
+      minutes: warren.stats.minutes,
+      branches,
+    };
+  }, [warren.nodes, warren.spine, warren.stats, spineOrder]);
 
   const [step, setStep] = useState(1); // how many timeline nodes are revealed
   const [playing, setPlaying] = useState(true);
@@ -114,6 +128,7 @@ export default function ReplayMap({ warren }: { warren: SavedWarren }) {
         <div className={styles.titlecard}>
           <div className={styles.tcLabel}>now replaying</div>
           <div className={styles.tcTitle}>{warren.title}</div>
+          <BadgeRow shape={shape} />
           {warren.isOwner ? (
             <>
               <PublishToggle id={warren.id} initialPublic={warren.isPublic} />
