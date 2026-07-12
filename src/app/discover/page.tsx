@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Roulette } from "@/components/discover/Roulette";
 import { onThisDay, trending, type DiscoverItem } from "@/lib/wikipedia/discover";
+import { TOURS } from "@/lib/explore/tours";
 import styles from "./discover.module.css";
 
 export const metadata: Metadata = {
@@ -52,6 +53,26 @@ export default async function DiscoverPage() {
       </header>
 
       <main className={styles.main}>
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Guided tours</h2>
+          <div className={styles.tourGrid}>
+            {TOURS.map((tour) => (
+              <Link
+                key={tour.slug}
+                href={startHref(tour.path[0])}
+                className={styles.tourCard}
+              >
+                <div className={styles.tourGlyph} aria-hidden>
+                  {tour.glyph}
+                </div>
+                <div className={styles.tourTitle}>{tour.title}</div>
+                <p className={styles.tourBlurb}>{tour.blurb}</p>
+                <div className={styles.tourPath}>{tour.path.join(" → ")}</div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Feeling lucky</h2>
           <Roulette />
