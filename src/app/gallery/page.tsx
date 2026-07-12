@@ -78,6 +78,9 @@ export default async function GalleryPage() {
           </div>
         </Link>
         <div className={styles.navRight}>
+          <Link href="/discover" className={styles.navLink}>
+            Discover
+          </Link>
           {user ? (
             <Link href="/learn" className={styles.navLink}>
               Learn
