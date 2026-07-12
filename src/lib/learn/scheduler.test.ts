@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { newCardState, review, isDue, isReviewRating } from "./scheduler";
+import { newCardState, review, isDue, isReviewRating, masteryOf } from "./scheduler";
 
 const NOW = 1_800_000_000_000;
 
@@ -65,5 +65,20 @@ describe("isDue", () => {
     const s = review(newCardState(NOW), "easy", NOW);
     expect(isDue(s, NOW)).toBe(false); // pushed into the future
     expect(isDue(s, s.due)).toBe(true);
+  });
+});
+
+describe("masteryOf", () => {
+  it("is 'new' for a never-reviewed card", () => {
+    expect(masteryOf({ state: 0, reps: 0, stability: 0 })).toBe("new");
+  });
+  it("is 'learning' while in Learning/Relearning", () => {
+    expect(masteryOf({ state: 1, reps: 1, stability: 5 })).toBe("learning");
+    expect(masteryOf({ state: 3, reps: 4, stability: 20 })).toBe("learning");
+  });
+  it("buckets Review cards by stability", () => {
+    expect(masteryOf({ state: 2, reps: 2, stability: 5 })).toBe("learning"); // < 14d
+    expect(masteryOf({ state: 2, reps: 3, stability: 30 })).toBe("familiar"); // 14–60d
+    expect(masteryOf({ state: 2, reps: 6, stability: 120 })).toBe("mastered"); // >= 60d
   });
 });

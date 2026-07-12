@@ -1,6 +1,14 @@
 import "server-only";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { newCardState, review, type CardState, type ReviewRating } from "./scheduler";
+import {
+  newCardState,
+  review,
+  masteryOf,
+  MASTERY_RANK,
+  type CardState,
+  type ReviewRating,
+  type Mastery,
+} from "./scheduler";
 import type { Flashcard } from "@/lib/ai/flashcards";
 import type { Viewer } from "@/lib/explore/repository";
 
@@ -135,4 +143,72 @@ export async function reviewCard(
   const { error: updErr } = await db.from("card").update(stateColumns(next)).eq("id", cardId);
   if (updErr) throw new Error(`review card: ${updErr.message}`);
   return { ...current, ...next };
+}
+
+/** A topic in the "what you know" map: one article, aggregated across its cards. */
+export type KnownTopic = {
+  article: string;
+  cards: number;
+  due: number;
+  mastery: Mastery; // the article's best mastery across its cards
+};
+
+export type KnowledgeMap = {
+  topics: KnownTopic[]; // sorted: most-mastered first, then most cards
+  totalCards: number;
+  totalDue: number;
+  mastered: number; // count of topics at "mastered"
+};
+
+/**
+ * Aggregate the viewer's cards into the "what you know" map — the visible payoff of the
+ * personal knowledge graph (PRODUCT_PLAN §6, the moat). Groups by article; an article's mastery
+ * is the best across its cards. Owner-scoped. Cheap: one scoped read + in-JS aggregation.
+ */
+export async function knowledgeMap(
+  viewer: Viewer,
+  now: number = Date.now(),
+): Promise<KnowledgeMap> {
+  const empty: KnowledgeMap = { topics: [], totalCards: 0, totalDue: 0, mastered: 0 };
+  const db = getAdminClient();
+  if (!db || (!viewer.userId && !viewer.anonId)) return empty;
+
+  let q = db.from("card").select("article, due, state, reps, stability");
+  q = viewer.userId ? q.eq("owner_id", viewer.userId) : q.eq("anon_id", viewer.anonId!);
+  const { data, error } = await q;
+  if (error || !data) return empty;
+
+  const byArticle = new Map<string, { cards: number; due: number; bestRank: number }>();
+  let totalDue = 0;
+  for (const r of data as { article: string; due: string; state: number; reps: number; stability: number }[]) {
+    const m = masteryOf({ state: r.state, reps: r.reps, stability: r.stability });
+    const isDueNow = new Date(r.due).getTime() <= now;
+    if (isDueNow) totalDue++;
+    const cur = byArticle.get(r.article) ?? { cards: 0, due: 0, bestRank: 0 };
+    cur.cards += 1;
+    if (isDueNow) cur.due += 1;
+    cur.bestRank = Math.max(cur.bestRank, MASTERY_RANK[m]);
+    byArticle.set(r.article, cur);
+  }
+
+  const rankToMastery = (Object.keys(MASTERY_RANK) as Mastery[]).reduce(
+    (acc, k) => ((acc[MASTERY_RANK[k]] = k), acc),
+    {} as Record<number, Mastery>,
+  );
+
+  const topics: KnownTopic[] = [...byArticle.entries()]
+    .map(([article, v]) => ({
+      article,
+      cards: v.cards,
+      due: v.due,
+      mastery: rankToMastery[v.bestRank],
+    }))
+    .sort((a, b) => MASTERY_RANK[b.mastery] - MASTERY_RANK[a.mastery] || b.cards - a.cards);
+
+  return {
+    topics,
+    totalCards: data.length,
+    totalDue,
+    mastered: topics.filter((t) => t.mastery === "mastered").length,
+  };
 }

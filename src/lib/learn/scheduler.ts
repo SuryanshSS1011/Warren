@@ -86,3 +86,25 @@ export function review(
 export function isDue(s: CardState, now: number = Date.now()): boolean {
   return s.due <= now;
 }
+
+/** How well a card is known, for the "what you know" map. Derived from FSRS state + stability
+    (days a memory is expected to last): a never-reviewed card is "new"; higher stability means
+    better retention. Buckets are coarse on purpose — this is a self-knowledge signal, not a grade. */
+export type Mastery = "new" | "learning" | "familiar" | "mastered";
+
+export function masteryOf(s: Pick<CardState, "state" | "reps" | "stability">): Mastery {
+  if (s.reps === 0 || s.state === 0) return "new"; // never reviewed / New
+  if (s.state === 1 || s.state === 3) return "learning"; // Learning / Relearning
+  // In Review: bucket by stability (expected retention in days).
+  if (s.stability >= 60) return "mastered";
+  if (s.stability >= 14) return "familiar";
+  return "learning";
+}
+
+/** Numeric rank for aggregating an article's overall mastery (max across its cards). */
+export const MASTERY_RANK: Record<Mastery, number> = {
+  new: 0,
+  learning: 1,
+  familiar: 2,
+  mastered: 3,
+};

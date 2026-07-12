@@ -47,7 +47,7 @@ function chain() {
 const from = vi.fn(() => chain());
 vi.mock("@/lib/supabase/admin", () => ({ getAdminClient: () => ({ from }) }));
 
-import { createCards, listDueCards, reviewCard, countDueCards } from "./repository";
+import { createCards, listDueCards, reviewCard, countDueCards, knowledgeMap } from "./repository";
 
 const NOW = 1_800_000_000_000;
 
@@ -134,5 +134,35 @@ describe("reviewCard (ownership + FSRS)", () => {
   it("returns null when the card doesn't exist", async () => {
     state.cardRow = null;
     expect(await reviewCard({ anonId: "owner-anon" }, "missing", "good", NOW)).toBeNull();
+  });
+});
+
+describe("knowledgeMap", () => {
+  it("aggregates cards by article with best mastery, counts, and due", async () => {
+    const now = NOW;
+    state.listRows = [
+      // Jazz: two cards, one mastered (stability high, Review), one new
+      { article: "Jazz", due: new Date(now - 1000).toISOString(), state: 2, reps: 6, stability: 120 },
+      { article: "Jazz", due: new Date(now + 100000).toISOString(), state: 0, reps: 0, stability: 0 },
+      // Blues: one learning card, due now
+      { article: "Blues", due: new Date(now - 500).toISOString(), state: 1, reps: 1, stability: 3 },
+    ];
+    const map = await knowledgeMap({ userId: "u1" }, now);
+    expect(state.captured.owner_id).toBe("u1");
+    expect(map.totalCards).toBe(3);
+    expect(map.totalDue).toBe(2); // the two with due <= now
+    expect(map.mastered).toBe(1); // Jazz
+    // Jazz sorts first (mastered > learning); its mastery is the BEST across its cards.
+    expect(map.topics[0].article).toBe("Jazz");
+    expect(map.topics[0].mastery).toBe("mastered");
+    expect(map.topics[0].cards).toBe(2);
+    expect(map.topics[0].due).toBe(1);
+    const blues = map.topics.find((t) => t.article === "Blues")!;
+    expect(blues.mastery).toBe("learning");
+  });
+
+  it("returns an empty map without a viewer", async () => {
+    const map = await knowledgeMap({}, NOW);
+    expect(map).toEqual({ topics: [], totalCards: 0, totalDue: 0, mastered: 0 });
   });
 });
