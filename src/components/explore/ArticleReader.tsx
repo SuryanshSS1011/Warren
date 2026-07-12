@@ -8,6 +8,7 @@ import { wikipediaArticleUrl, type AiAttribution as AiAttributionData } from "@/
 import { AiAttribution } from "./AiAttribution";
 import { ListenButton } from "./ListenButton";
 import { AskArticle } from "./AskArticle";
+import { AddToLearn } from "./AddToLearn";
 import { useTier } from "@/hooks/useTier";
 import type { ReadingLevel } from "@/lib/ai/reading-level";
 
@@ -146,7 +147,10 @@ export function ArticleReader({
             </button>
           ))}
         </div>
-        <ListenButton text={readableText} tier={tier} />
+        <div className={styles.readerActions}>
+          <ListenButton text={readableText} tier={tier} />
+          <AddToLearn title={title} tier={tier} />
+        </div>
       </div>
 
       {level !== "original" ? (
