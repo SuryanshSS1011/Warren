@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseArticleHtml, hrefToTitle } from "./content";
+import { parseArticleHtml, hrefToTitle, blocksToText } from "./content";
 
 describe("hrefToTitle", () => {
   it("resolves ./Title and /wiki/Title article links", () => {
@@ -111,5 +111,19 @@ describe("parseArticleHtml", () => {
   it("skips empty paragraphs", () => {
     const { blocks } = parseArticleHtml("<p></p><p>  </p><p>Real.</p>", "T");
     expect(blocks).toHaveLength(1);
+  });
+});
+
+describe("blocksToText", () => {
+  it("flattens blocks (incl. link labels) to plain text, blank-line separated", () => {
+    const { blocks } = parseArticleHtml(
+      '<p>Jazz is <a href="./Music">music</a>.</p><h2>History</h2><p>It began early.</p>',
+      "Jazz",
+    );
+    const text = blocksToText(blocks);
+    expect(text).toContain("Jazz is music.");
+    expect(text).toContain("History");
+    expect(text).toContain("It began early.");
+    expect(text.split("\n\n").length).toBe(3);
   });
 });
