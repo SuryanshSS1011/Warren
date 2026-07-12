@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { SiteFooter } from "@/components/SiteFooter";
 import { StudySession } from "@/components/learn/StudySession";
+import { KnowledgeMapView } from "@/components/learn/KnowledgeMapView";
 import { getUser } from "@/lib/supabase/auth";
 import { can } from "@/lib/billing/entitlements";
+import { knowledgeMap } from "@/lib/learn/repository";
 import styles from "./learn.module.css";
+
+const ANON_COOKIE = "warren_anon";
 
 export const metadata: Metadata = {
   title: "Learn — Warren",
@@ -18,6 +23,9 @@ export default async function LearnPage() {
   if (!user) redirect("/signin?next=/learn");
   if (!(await can("spaced_repetition"))) redirect("/pricing");
 
+  const anonId = (await cookies()).get(ANON_COOKIE)?.value;
+  const map = await knowledgeMap({ anonId, userId: user.id });
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -28,7 +36,13 @@ export default async function LearnPage() {
         <p className={styles.sub}>Review what you&rsquo;ve explored, spaced for retention.</p>
       </header>
       <main className={styles.main}>
-        <StudySession />
+        <section className={styles.section}>
+          <StudySession />
+        </section>
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>What you know</h2>
+          <KnowledgeMapView map={map} />
+        </section>
       </main>
       <SiteFooter />
     </div>
