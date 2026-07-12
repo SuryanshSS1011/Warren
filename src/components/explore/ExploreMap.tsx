@@ -260,6 +260,22 @@ export default function ExploreMap() {
     trackEvent("session_start");
   }, []);
 
+  // Deep-link: /?start=<title> auto-seeds a warren (used by Discover "start a warren"). Runs
+  // once on mount; strips the param so a refresh doesn't re-seed. The synchronous seed is
+  // intentional (a one-shot deep-link), not a render loop.
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    const url = new URL(window.location.href);
+    const start = url.searchParams.get("start");
+    if (start) {
+      seedTopic(start);
+      url.searchParams.delete("start");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // elapsed timer
   useEffect(() => {
     const iv = setInterval(
