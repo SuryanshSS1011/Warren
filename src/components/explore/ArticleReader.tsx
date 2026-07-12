@@ -1,9 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "@/app/explore.module.css";
 import type { ArticleContent, Block, TextSpan } from "@/lib/wikipedia/content";
-import { wikipediaArticleUrl } from "@/lib/attribution";
+import { wikipediaArticleUrl, type AiAttribution as AiAttributionData } from "@/lib/attribution";
+import { AiAttribution } from "./AiAttribution";
+import type { ReadingLevel } from "@/lib/ai/reading-level";
+
+type Level = "original" | ReadingLevel;
+
+const LEVEL_OPTIONS: { value: Level; label: string }[] = [
+  { value: "original", label: "As written" },
+  { value: "eli5", label: "ELI5" },
+  { value: "simple", label: "Simple" },
+  { value: "expert", label: "Expert" },
+];
 
 /**
  * Native typography reader — replaces the old sandboxed Wikipedia iframe. Renders the article's
@@ -17,8 +29,17 @@ export function ArticleReader({
   title: string;
   onHopTo?: (fromTitle: string, toTitle: string) => void;
 }) {
+  const router = useRouter();
   const [content, setContent] = useState<ArticleContent | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+
+  // Reading level: "original" shows the source blocks; a rewrite level fetches AI-rewritten
+  // prose (Pro-gated). Reset to original whenever the article changes.
+  const [level, setLevel] = useState<Level>("original");
+  const [rewrite, setRewrite] = useState<{ text: string; attribution: AiAttributionData } | null>(
+    null,
+  );
+  const [rewriteState, setRewriteState] = useState<"idle" | "loading" | "error">("idle");
 
   useEffect(() => {
     // Reset synchronously when the article changes (intentional; no cascading fetch loop).
@@ -26,6 +47,9 @@ export function ArticleReader({
     let cancelled = false;
     setState("loading");
     setContent(null);
+    setLevel("original");
+    setRewrite(null);
+    setRewriteState("idle");
     (async () => {
       try {
         const res = await fetch(`/api/wiki/content?title=${encodeURIComponent(title)}`);
@@ -44,6 +68,34 @@ export function ArticleReader({
     };
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [title]);
+
+  async function changeLevel(next: Level) {
+    setLevel(next);
+    if (next === "original") {
+      setRewrite(null);
+      setRewriteState("idle");
+      return;
+    }
+    setRewriteState("loading");
+    setRewrite(null);
+    try {
+      const res = await fetch(
+        `/api/wiki/reading-level?title=${encodeURIComponent(title)}&level=${next}`,
+      );
+      if (res.status === 402) {
+        router.push("/pricing");
+        setLevel("original");
+        setRewriteState("idle");
+        return;
+      }
+      if (!res.ok) throw new Error(String(res.status));
+      const data = (await res.json()) as { text: string; attribution: AiAttributionData };
+      setRewrite(data);
+      setRewriteState("idle");
+    } catch {
+      setRewriteState("error");
+    }
+  }
 
   if (state === "loading") {
     return (
@@ -69,16 +121,54 @@ export function ArticleReader({
 
   return (
     <div className={styles.reader}>
-      {content.blocks.map((block, i) => (
-        <BlockView key={i} block={block} sourceTitle={title} onHopTo={onHopTo} />
-      ))}
-      <p className={styles.readerAttribution}>
-        From{" "}
-        <a href={wikipediaArticleUrl(title)} target="_blank" rel="noopener noreferrer">
-          {title} on Wikipedia
-        </a>
-        , under CC BY-SA 4.0.
-      </p>
+      <div className={styles.levelBar} role="group" aria-label="Reading level">
+        {LEVEL_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`${styles.levelBtn} ${level === opt.value ? styles.levelBtnActive : ""}`}
+            aria-pressed={level === opt.value}
+            onClick={() => changeLevel(opt.value)}
+            disabled={rewriteState === "loading"}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {level !== "original" ? (
+        rewriteState === "loading" ? (
+          <div className={styles.readerSkeleton} aria-hidden>
+            <div className={styles.skeletonLine} />
+            <div className={styles.skeletonLine} />
+            <div className={styles.skeletonLineShort} />
+          </div>
+        ) : rewriteState === "error" ? (
+          <p className={styles.readerError}>Couldn&rsquo;t rewrite this article — try again.</p>
+        ) : rewrite ? (
+          <>
+            {rewrite.text.split(/\n{2,}/).map((para, i) => (
+              <p key={i} className={styles.readerP}>
+                {para}
+              </p>
+            ))}
+            <AiAttribution attribution={rewrite.attribution} />
+          </>
+        ) : null
+      ) : (
+        <>
+          {content.blocks.map((block, i) => (
+            <BlockView key={i} block={block} sourceTitle={title} onHopTo={onHopTo} />
+          ))}
+          <p className={styles.readerAttribution}>
+            From{" "}
+            <a href={wikipediaArticleUrl(title)} target="_blank" rel="noopener noreferrer">
+              {title} on Wikipedia
+            </a>
+            , under CC BY-SA 4.0.
+          </p>
+        </>
+      )}
     </div>
   );
 }
