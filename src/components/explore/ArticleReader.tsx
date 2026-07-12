@@ -7,6 +7,7 @@ import type { ArticleContent, Block, TextSpan } from "@/lib/wikipedia/content";
 import { wikipediaArticleUrl, type AiAttribution as AiAttributionData } from "@/lib/attribution";
 import { AiAttribution } from "./AiAttribution";
 import { ListenButton } from "./ListenButton";
+import { AskArticle } from "./AskArticle";
 import { useTier } from "@/hooks/useTier";
 import type { ReadingLevel } from "@/lib/ai/reading-level";
 
@@ -181,6 +182,8 @@ export function ArticleReader({
           </p>
         </>
       )}
+
+      <AskArticle title={title} tier={tier} />
     </div>
   );
 }

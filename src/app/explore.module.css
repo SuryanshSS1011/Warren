@@ -819,6 +819,81 @@
   color: var(--ink-dim);
   padding: 20px 0;
 }
+/* "Ask this article" grounded chat (Pro). */
+.askBox {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in oklch, var(--ink-faint), transparent 78%);
+  font-family: var(--font-hanken), sans-serif;
+}
+.askHead {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-hi);
+  margin-bottom: 10px;
+}
+.askForm {
+  display: flex;
+  gap: 8px;
+}
+.askInput {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in oklch, var(--ink-faint), transparent 65%);
+  background: var(--bg-0);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+.askInput:focus {
+  outline: none;
+  border-color: color-mix(in oklch, var(--accent), transparent 45%);
+}
+.askSubmit {
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 45%);
+  background: color-mix(in oklch, var(--accent), transparent 82%);
+  color: var(--accent-hi);
+  font-size: 13px;
+  font-weight: 600;
+}
+.askSubmit:disabled {
+  opacity: 0.6;
+}
+.askError {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--accent-hi);
+}
+.askAnswer {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 11px;
+  background: color-mix(in oklch, var(--accent), transparent 92%);
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 82%);
+}
+.askQuestion {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-dim);
+  margin: 0 0 8px;
+}
+.askText {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink);
+  margin: 0;
+}
+.askDisclaimer {
+  margin: 10px 0 0;
+  font-size: 10px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
 .readerError a {
   color: var(--accent-hi);
 }
