@@ -9,6 +9,7 @@ import { AiAttribution } from "./AiAttribution";
 import { ListenButton } from "./ListenButton";
 import { AskArticle } from "./AskArticle";
 import { AddToLearn } from "./AddToLearn";
+import { CitationExplorer } from "./CitationExplorer";
 import { useTier } from "@/hooks/useTier";
 import type { ReadingLevel } from "@/lib/ai/reading-level";
 
@@ -188,6 +189,7 @@ export function ArticleReader({
       )}
 
       <AskArticle title={title} tier={tier} />
+      {tier === "researcher" ? <CitationExplorer title={title} tier={tier} /> : null}
     </div>
   );
 }

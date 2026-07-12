@@ -931,6 +931,96 @@
   color: var(--ink-faint);
   font-style: italic;
 }
+/* Citation explorer (Researcher). */
+.citeBox {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in oklch, var(--ink-faint), transparent 78%);
+  font-family: var(--font-hanken), sans-serif;
+}
+.citeHead {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-hi);
+  margin-bottom: 10px;
+}
+.citePro {
+  color: var(--ink-faint);
+}
+.citeBtn {
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 55%);
+  background: color-mix(in oklch, var(--accent), transparent 88%);
+  color: var(--accent-hi);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.citeBtn:disabled {
+  opacity: 0.6;
+}
+.citeStats {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin-bottom: 12px;
+}
+.citeWarn {
+  color: var(--accent-hi);
+  font-weight: 600;
+}
+.citeList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.citeItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in oklch, var(--ink-faint), transparent 86%);
+  font-size: 12px;
+}
+.citeText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+.citeText a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.citeFlags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.citeFlag {
+  font-family: var(--font-space-mono), monospace;
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in oklch, #e0684c, transparent 60%);
+  color: #f0947e;
+  white-space: nowrap;
+}
+.citeError {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--accent-hi);
+}
 .readerError a {
   color: var(--accent-hi);
 }
