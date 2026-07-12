@@ -19,6 +19,15 @@ export type ArticleContent = {
 
 const MAX_BLOCKS = 400; // generous cap; guards against pathological pages
 
+/** Flatten a block model to plain text (paragraphs joined, headings as lines). For feeding
+    the reading-level rewriter — it never sees HTML, only the already-sanitized text. */
+export function blocksToText(blocks: Block[]): string {
+  return blocks
+    .map((b) => b.spans.map((s) => s.text).join(""))
+    .join("\n\n")
+    .trim();
+}
+
 /** Decode the handful of HTML entities that appear in extracted text. */
 function decodeEntities(s: string): string {
   return s
