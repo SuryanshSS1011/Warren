@@ -6,6 +6,8 @@ import styles from "@/app/explore.module.css";
 import type { ArticleContent, Block, TextSpan } from "@/lib/wikipedia/content";
 import { wikipediaArticleUrl, type AiAttribution as AiAttributionData } from "@/lib/attribution";
 import { AiAttribution } from "./AiAttribution";
+import { ListenButton } from "./ListenButton";
+import { useTier } from "@/hooks/useTier";
 import type { ReadingLevel } from "@/lib/ai/reading-level";
 
 type Level = "original" | ReadingLevel;
@@ -30,6 +32,7 @@ export function ArticleReader({
   onHopTo?: (fromTitle: string, toTitle: string) => void;
 }) {
   const router = useRouter();
+  const { tier } = useTier();
   const [content, setContent] = useState<ArticleContent | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
@@ -119,21 +122,30 @@ export function ArticleReader({
     );
   }
 
+  // The text currently on screen — the rewrite when a level is active, else the source prose.
+  const readableText =
+    level !== "original" && rewrite
+      ? rewrite.text
+      : content.blocks.map((b) => b.spans.map((s) => s.text).join("")).join("\n\n");
+
   return (
     <div className={styles.reader}>
-      <div className={styles.levelBar} role="group" aria-label="Reading level">
-        {LEVEL_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            className={`${styles.levelBtn} ${level === opt.value ? styles.levelBtnActive : ""}`}
-            aria-pressed={level === opt.value}
-            onClick={() => changeLevel(opt.value)}
-            disabled={rewriteState === "loading"}
-          >
-            {opt.label}
-          </button>
-        ))}
+      <div className={styles.readerControls}>
+        <div className={styles.levelBar} role="group" aria-label="Reading level">
+          {LEVEL_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`${styles.levelBtn} ${level === opt.value ? styles.levelBtnActive : ""}`}
+              aria-pressed={level === opt.value}
+              onClick={() => changeLevel(opt.value)}
+              disabled={rewriteState === "loading"}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <ListenButton text={readableText} tier={tier} />
       </div>
 
       {level !== "original" ? (
