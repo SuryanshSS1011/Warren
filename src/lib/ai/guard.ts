@@ -11,8 +11,10 @@ const AI_WINDOW_SECONDS = 60 * 60; // 60 generations / hour / IP
 /** Best-effort client IP from proxy headers (Vercel sets x-forwarded-for). */
 function clientIp(req: NextRequest): string {
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "unknown";
+  const first = fwd?.split(",")[0]?.trim();
+  if (first) return first;
+  const real = req.headers.get("x-real-ip")?.trim();
+  return real || "unknown";
 }
 
 /**
