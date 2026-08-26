@@ -9,9 +9,11 @@ const serverOnlyStub = fileURLToPath(new URL("./test/stubs/server-only.ts", impo
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    tsconfigPaths: true,
-    alias: { "server-only": serverOnlyStub },
-  },
+    alias: {
+      "server-only": serverOnlyStub,
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  }
   test: {
     globals: true,
     setupFiles: ["./test/setup.ts"],
