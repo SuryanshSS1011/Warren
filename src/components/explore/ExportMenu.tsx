@@ -34,7 +34,8 @@ export function ExportMenu({ warrenId }: { warrenId: string }) {
       a.href = url;
       a.download = name;
       a.click();
-      URL.revokeObjectURL(url);
+      // Give the browser a moment to start the download before revoking the object URL.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
       setError("Couldn't reach the server.");
     } finally {
