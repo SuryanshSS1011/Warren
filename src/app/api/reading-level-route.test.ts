@@ -31,7 +31,7 @@ beforeEach(() => {
 describe("GET /api/wiki/reading-level", () => {
   it("400s without a valid title+level", async () => {
     can.mockResolvedValue(true);
-    expect((await GET(req("?title=Jazz"), )).status).toBe(400); // no level
+    expect((await GET(req("?title=Jazz"))).status).toBe(400); // no level
     expect((await GET(req("?title=Jazz&level=phd"))).status).toBe(400); // bad level
     expect((await GET(req("?level=eli5"))).status).toBe(400); // no title
   });
