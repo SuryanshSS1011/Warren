@@ -1,0 +1,64 @@
+.page {
+  /* body is overflow:hidden (immersive map); this page is its own scroll container. */
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+  color: var(--ink);
+}
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+}
+.back {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--ink-dim);
+  text-decoration: none;
+  margin-bottom: 32px;
+}
+.back:hover {
+  color: var(--ink);
+}
+.h1 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0 0 32px;
+  letter-spacing: -0.01em;
+}
+.section {
+  margin-bottom: 32px;
+}
+.h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-hi);
+  margin: 0 0 8px;
+}
+.section p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+  margin: 0 0 10px;
+}
+.section a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.section a:hover {
+  color: var(--accent-hi);
+}
+.disclaimer {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 78%);
+  background: color-mix(in oklch, var(--accent), transparent 92%);
+  font-size: 13.5px !important;
+  color: var(--ink) !important;
+}

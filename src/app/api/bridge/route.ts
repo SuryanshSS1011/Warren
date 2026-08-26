@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { generateConnectiveTissue } from "@/lib/ai/connective-tissue";
+import { generateConnectiveTissueAttributed } from "@/lib/ai/connective-tissue";
 import { aiErrorResponse } from "@/lib/ai/error-response";
+import { checkAiRateLimit } from "@/lib/ai/guard";
 
 const BridgeRequest = z.object({
   from: z.object({ title: z.string().min(1), description: z.string().optional() }),
@@ -21,9 +22,11 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
+  const limited = await checkAiRateLimit(req, "bridge");
+  if (limited) return limited;
   try {
-    const bridge = await generateConnectiveTissue(parsed.data);
-    return NextResponse.json({ bridge });
+    const { text, attribution } = await generateConnectiveTissueAttributed(parsed.data);
+    return NextResponse.json({ bridge: text, attribution });
   } catch (err) {
     return aiErrorResponse(err);
   }

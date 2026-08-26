@@ -8,6 +8,8 @@ import "server-only";
 import PQueue from "p-queue";
 import { getServerEnv } from "@/lib/env/server";
 import { cached } from "@/lib/cache/redis";
+import { parseArticleHtml, type ArticleContent } from "./content";
+import { parseCitations, type CitationReport } from "./citations";
 
 const REST_BASE = "https://en.wikipedia.org/api/rest_v1";
 const ACTION_BASE = "https://en.wikipedia.org/w/api.php";
@@ -94,6 +96,49 @@ export async function getPageSummary(title: string): Promise<PageSummary | null>
       throw new Error(`Wikipedia summary ${title}: ${res.status}`);
     }
     return (await res.json()) as PageSummary;
+  });
+}
+
+const CONTENT_TTL = 60 * 60 * 24 * 7; // 7 days — article prose is stable
+
+/**
+ * Full article prose as a SAFE block model for the native reader (replaces the old iframe).
+ * Fetches REST /page/html and parses it server-side into paragraphs/headings + article links
+ * (see content.ts) — no raw Wikipedia HTML reaches the client. Returns null on 404.
+ */
+export async function getArticleContent(title: string): Promise<ArticleContent | null> {
+  return cached(`wiki:content:${title}`, CONTENT_TTL, async () => {
+    const res = await wikiFetch(`${REST_BASE}/page/html/${encodeURIComponent(title)}`);
+    if (res.status === 404) {
+      discard(res);
+      return null;
+    }
+    if (!res.ok) {
+      discard(res);
+      throw new Error(`Wikipedia content ${title}: ${res.status}`);
+    }
+    const html = await res.text();
+    return parseArticleHtml(html, title);
+  });
+}
+
+/**
+ * Citation/sourcing report for an article (Researcher tier). Parses the same REST /page/html
+ * we fetch for the reader into references + weak-source / unsourced-claim signals (citations.ts).
+ * Returns null on 404. Cached — an article's references are stable.
+ */
+export async function getCitations(title: string): Promise<CitationReport | null> {
+  return cached(`wiki:cites:${title}`, CONTENT_TTL, async () => {
+    const res = await wikiFetch(`${REST_BASE}/page/html/${encodeURIComponent(title)}`);
+    if (res.status === 404) {
+      discard(res);
+      return null;
+    }
+    if (!res.ok) {
+      discard(res);
+      throw new Error(`Wikipedia citations ${title}: ${res.status}`);
+    }
+    return parseCitations(await res.text());
   });
 }
 

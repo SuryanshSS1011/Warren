@@ -3,6 +3,11 @@ import { getAiEnv } from "@/lib/env/server";
 import { getAnthropic, getModel as getAnthropicModel } from "./anthropic";
 import { getGemini, getGeminiModel } from "./gemini";
 
+/** The model id backing the currently-selected provider — used to stamp AI attribution. */
+export function activeModel(): string {
+  return getAiEnv().AI_PROVIDER === "anthropic" ? getAnthropicModel() : getGeminiModel();
+}
+
 export type GenerateArgs = {
   system: string;
   user: string;

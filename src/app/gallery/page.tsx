@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./gallery.module.css";
 import MiniTrail from "@/components/explore/MiniTrail";
+import { SiteFooter } from "@/components/SiteFooter";
+import { getUser } from "@/lib/supabase/auth";
 import { listPublicWarrens, type WarrenCard } from "@/lib/explore/repository";
 
 export const metadata: Metadata = {
@@ -55,6 +57,7 @@ export default async function GalleryPage() {
   const warrens = await listPublicWarrens(24);
   const featured = warrens.slice(0, 3);
   const trending = warrens.slice(3);
+  const user = await getUser();
 
   return (
     <div className={styles.root}>
@@ -74,9 +77,25 @@ export default async function GalleryPage() {
             <div className={styles.brandTag}>Gallery</div>
           </div>
         </Link>
-        <Link href="/" className={styles.cta}>
-          Start your own →
-        </Link>
+        <div className={styles.navRight}>
+          <Link href="/discover" className={styles.navLink}>
+            Discover
+          </Link>
+          {user ? (
+            <Link href="/learn" className={styles.navLink}>
+              Learn
+            </Link>
+          ) : null}
+          <Link href="/pricing" className={styles.navLink}>
+            Pricing
+          </Link>
+          <Link href={user ? "/my" : "/signin"} className={styles.navLink}>
+            {user ? "My warrens" : "Sign in"}
+          </Link>
+          <Link href="/" className={styles.cta}>
+            Start your own →
+          </Link>
+        </div>
       </header>
 
       <section className={styles.hero}>
@@ -132,6 +151,7 @@ export default async function GalleryPage() {
           ) : null}
         </>
       )}
+      <SiteFooter />
     </div>
   );
 }

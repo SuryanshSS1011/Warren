@@ -1,0 +1,233 @@
+.page {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+  color: var(--ink);
+}
+.header {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 48px 24px 8px;
+  text-align: center;
+}
+.back {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 13px;
+  color: var(--ink-dim);
+  text-decoration: none;
+  margin-bottom: 28px;
+}
+.back:hover {
+  color: var(--ink);
+}
+.h1 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 34px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+.sub {
+  font-size: 14.5px;
+  color: var(--ink-dim);
+  margin: 0;
+}
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 36px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 44px;
+}
+.section {
+  display: flex;
+  flex-direction: column;
+}
+.sectionTitle {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-hi);
+  margin: 0 0 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklch, var(--ink-faint), transparent 80%);
+  background: var(--bg-1);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.card:hover {
+  border-color: color-mix(in oklch, var(--accent), transparent 55%);
+  transform: translateY(-2px);
+}
+.card:hover .cardStart {
+  color: var(--accent-hi);
+}
+.cardThumb,
+.cardThumbEmpty {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  object-fit: cover;
+  background: var(--bg-2);
+}
+.cardBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cardTitle {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.year {
+  font-family: var(--font-space-mono), monospace;
+  font-size: 11px;
+  color: var(--accent-hi);
+  margin-right: 6px;
+}
+.cardExtract {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-dim);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cardStart {
+  font-family: var(--font-hanken), sans-serif;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* Guided tours */
+.tourGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.tourCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 72%);
+  background: color-mix(in oklch, var(--accent), transparent 94%);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.tourCard:hover {
+  border-color: color-mix(in oklch, var(--accent), transparent 45%);
+  transform: translateY(-2px);
+}
+.tourGlyph {
+  font-size: 26px;
+  line-height: 1;
+}
+.tourTitle {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+}
+.tourBlurb {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  margin: 0;
+}
+.tourPath {
+  margin-top: 6px;
+  font-family: var(--font-space-mono), monospace;
+  font-size: 10px;
+  color: var(--ink-faint);
+  line-height: 1.5;
+}
+
+/* Roulette */
+.roulette {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+.spinBtn {
+  font-family: var(--font-hanken), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 20px;
+  border-radius: 11px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 45%);
+  background: color-mix(in oklch, var(--accent), transparent 82%);
+  color: var(--accent-hi);
+  cursor: pointer;
+}
+.spinBtn:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--accent), transparent 72%);
+}
+.spinBtn:disabled {
+  opacity: 0.6;
+}
+.rouletteCard {
+  max-width: 560px;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 70%);
+  background: var(--bg-1);
+}
+.rouletteTitle {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.rouletteExtract {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  margin: 0 0 14px;
+}
+.startBtn {
+  font-family: var(--font-hanken), sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--accent), transparent 45%);
+  background: color-mix(in oklch, var(--accent), transparent 85%);
+  color: var(--accent-hi);
+  cursor: pointer;
+}
+.startBtn:hover {
+  background: color-mix(in oklch, var(--accent), transparent 75%);
+}

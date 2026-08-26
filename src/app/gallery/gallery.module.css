@@ -63,6 +63,19 @@
   background: color-mix(in oklab, var(--accent), transparent 74%);
   transform: translateY(-1px);
 }
+.navRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.navLink {
+  font-size: 13.5px;
+  color: var(--ink-dim);
+  text-decoration: none;
+}
+.navLink:hover {
+  color: var(--ink);
+}
 
 .hero {
   max-width: 1120px;

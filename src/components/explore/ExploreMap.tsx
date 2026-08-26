@@ -9,9 +9,12 @@ import { liveIdFor, placeholder, resolve, upsertLive } from "@/lib/explore/artic
 import { bridgeFor, titleFor } from "@/lib/explore/narration";
 import { fetchBridge, fetchTitle } from "@/lib/explore/api";
 import { createPersistentCache } from "@/lib/explore/persistent-cache";
+import type { AiAttribution as AiAttributionData } from "@/lib/attribution";
+import { trackEvent } from "@/lib/analytics/events";
 import { exportWarrenImage } from "@/lib/explore/exportImage";
 import type { WarrenSnapshot } from "@/lib/explore/warren-snapshot";
 import ArticlePalette from "./ArticlePalette";
+import { AiBadge } from "./AiBadge";
 import BurrowCard from "./BurrowCard";
 import CanvasGraphEngine from "./CanvasGraphEngine";
 import ExploreHome from "./ExploreHome";
@@ -45,8 +48,15 @@ function Logo() {
   );
 }
 
-/** A connective-tissue subtitle that fades in like a film subtitle, and out on change. */
-function Subtitle({ text }: { text: string }) {
+/** A connective-tissue subtitle that fades in like a film subtitle, and out on change.
+    Shows a compact "AI" attribution flag once the AI bridge (not the canned fallback) lands. */
+function Subtitle({
+  text,
+  attribution,
+}: {
+  text: string;
+  attribution?: AiAttributionData | null;
+}) {
   return (
     <motion.div
       className={styles.subtitle}
@@ -58,6 +68,7 @@ function Subtitle({ text }: { text: string }) {
       <span className={styles.subtitleQuote}>{"“"}</span>
       {text}
       <span className={styles.subtitleQuote}>{"”"}</span>
+      {attribution ? <AiBadge attribution={attribution} /> : null}
     </motion.div>
   );
 }
@@ -78,7 +89,11 @@ export default function ExploreMap() {
   const [spineIds, setSpineIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newestId, setNewestId] = useState<string | null>(null);
-  const [subtitle, setSubtitle] = useState<{ text: string; key: number } | null>(null);
+  const [subtitle, setSubtitle] = useState<{
+    text: string;
+    key: number;
+    attribution?: AiAttributionData | null;
+  } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [viewportW, setViewportW] = useState<number>(MOBILE_BP + 1);
   const [listOpen, setListOpen] = useState(false);
@@ -88,8 +103,8 @@ export default function ExploreMap() {
   const [saving, setSaving] = useState(false);
   // AI auto-titles keyed by "firstId>lastId"; overlays the canned title when present.
   const [aiTitles, setAiTitles] = useState<Record<string, string>>({});
-  // Highlights saved from the embedded Wikipedia reader, keyed by node id (session-only).
-  const [, setHighlights] = useState<Record<string, string[]>>({});
+  // Attribution for the AI auto-title currently shown (null until an AI title lands).
+  const [titleAttribution, setTitleAttribution] = useState<AiAttributionData | null>(null);
 
   // lazy init keeps the impure Date.now() out of render (run once on mount)
   const [startedAt] = useState(() => Date.now());
@@ -122,7 +137,7 @@ export default function ExploreMap() {
       const to = resolve(toId) ?? placeholder(toId);
       if (!from) return;
       try {
-        const ai = await fetchBridge(
+        const { text: ai, attribution } = await fetchBridge(
           { title: from.title, description: from.blurb },
           { title: to.title, description: to.blurb },
         );
@@ -132,8 +147,9 @@ export default function ExploreMap() {
             e.source === fromId && e.target === toId ? { ...e, bridge: ai } : e,
           ),
         );
-        // only swap the visible subtitle if it's still showing this hop's fallback
-        setSubtitle((s) => (s && s.text === fallback ? { ...s, text: ai } : s));
+        // only swap the visible subtitle if it's still showing this hop's fallback, and
+        // attach the AI attribution so the subtitle can show its "AI" flag.
+        setSubtitle((s) => (s && s.text === fallback ? { ...s, text: ai, attribution } : s));
       } catch {
         // keep the canned bridge — already shown
       }
@@ -241,6 +257,23 @@ export default function ExploreMap() {
     setSpineIds([id]);
     setNewestId(id);
     setSelectedId(id);
+    trackEvent("session_start");
+  }, []);
+
+  // Deep-link: /?start=<title> auto-seeds a warren (used by Discover "start a warren"). Runs
+  // once on mount; strips the param so a refresh doesn't re-seed. The synchronous seed is
+  // intentional (a one-shot deep-link), not a render loop.
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    const url = new URL(window.location.href);
+    const start = url.searchParams.get("start");
+    if (start) {
+      seedTopic(start);
+      url.searchParams.delete("start");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // elapsed timer
@@ -295,10 +328,11 @@ export default function ExploreMap() {
     let cancelled = false;
     const titles = spineIds.map((id) => resolve(id)?.title).filter(Boolean) as string[];
     fetchTitle(titles)
-      .then((t) => {
+      .then(({ text: t, attribution }) => {
         if (cancelled || !t) return;
         titleCache.set(titleKey, t);
         setAiTitles((m) => ({ ...m, [titleKey]: t }));
+        setTitleAttribution(attribution);
       })
       .catch(() => {});
     return () => {
@@ -307,7 +341,10 @@ export default function ExploreMap() {
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [titleKey]);
-  const autoTitle = (titleKey && aiTitles[titleKey]) || cannedTitle;
+  const aiTitle = titleKey ? aiTitles[titleKey] : undefined;
+  const autoTitle = aiTitle || cannedTitle;
+  // Only flag the title when it's the AI-generated one (not the canned fallback).
+  const showTitleBadge = Boolean(aiTitle) && Boolean(titleAttribution);
 
   const hops = Math.max(0, spineIds.length - 1);
   const cats = new Set(nodes.map((n) => n.category)).size;
@@ -385,18 +422,6 @@ export default function ExploreMap() {
     [selectedId, spineIds, addHop, handleChip, present.length],
   );
 
-  const handleHighlight = useCallback(
-    (nodeId: string, text: string) => {
-      if (!text) return;
-      setHighlights((prev) => ({
-        ...prev,
-        [nodeId]: [...(prev[nodeId] ?? []), text],
-      }));
-      flashToast("Highlight saved");
-    },
-    [flashToast],
-  );
-
   // Keep the latest handleHopTo in a ref so the SSE connection (below) doesn't tear down
   // and reconnect on every hop/selection (which would drop events during the gap).
   const handleHopToRef = useRef(handleHopTo);
@@ -456,7 +481,11 @@ export default function ExploreMap() {
         });
         if (!res.ok) return; // 503 unconfigured / transient — stay silent, retry next change
         const data = (await res.json()) as { id?: string };
-        if (data.id) warrenIdRef.current = data.id;
+        if (data.id) {
+          const firstSave = !warrenIdRef.current;
+          warrenIdRef.current = data.id;
+          if (firstSave) trackEvent("warren_saved");
+        }
       } catch {
         /* offline — autosave is best-effort */
       }
@@ -464,31 +493,62 @@ export default function ExploreMap() {
     return () => clearTimeout(t);
   }, [buildSnapshot, nodes.length]);
 
+  // Share = ensure this session is saved, THEN publish it. Warrens are private by default
+  // (PRODUCT_PLAN §1.5), so an explicit Share is intent to make this trail public — otherwise
+  // the copied link would 404 for everyone but the author. Reuses the autosaved session row
+  // (warrenIdRef) when present so Share doesn't spawn a duplicate warren.
   const handleShare = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     const snapshot = buildSnapshot();
     try {
-      const res = await fetch("/api/warren", {
+      // 1) Make sure the warren exists and get its id — prefer the autosaved session row.
+      let id = warrenIdRef.current;
+      if (id) {
+        // Persist the latest state into the existing row before publishing.
+        await fetch("/api/warren", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, snapshot }),
+        });
+      } else {
+        const res = await fetch("/api/warren", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(snapshot),
+        });
+        const data = (await res.json()) as { id?: string; error?: string };
+        if (res.status === 503) {
+          flashToast("Sharing needs Supabase keys — saved nothing yet.");
+          return;
+        }
+        if (!res.ok || !data.id) {
+          flashToast(data.error ? `Couldn't share: ${data.error}` : "Couldn't share.");
+          return;
+        }
+        id = data.id;
+        warrenIdRef.current = id;
+      }
+
+      // 2) Publish so the shared link is viewable by others.
+      const pub = await fetch(`/api/warren/${id}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(snapshot),
+        body: JSON.stringify({ isPublic: true }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (res.status === 503) {
-        flashToast("Sharing needs Supabase keys — saved nothing yet.");
+      if (!pub.ok) {
+        flashToast("Saved privately — couldn't publish just now, try Share again.");
         return;
       }
-      if (!res.ok || !data.url) {
-        flashToast(data.error ? `Couldn't share: ${data.error}` : "Couldn't share.");
-        return;
-      }
-      const full = `${window.location.origin}${data.url}`;
+      trackEvent("warren_published");
+      trackEvent("warren_shared");
+
+      const full = `${window.location.origin}/w/${id}`;
       try {
         await navigator.clipboard.writeText(full);
-        flashToast("Share link copied to clipboard ✦");
+        flashToast("Published — share link copied to clipboard ✦");
       } catch {
-        flashToast(`Shared: ${full}`);
+        flashToast(`Published: ${full}`);
       }
     } catch {
       flashToast("Couldn't reach the server.");
@@ -546,7 +606,14 @@ export default function ExploreMap() {
         </div>
         <div className={styles.titlecard}>
           <div className={styles.tcLabel}>your warren</div>
-          <div className={styles.tcTitle}>{autoTitle}</div>
+          <div className={styles.tcTitle}>
+            {autoTitle}
+            {showTitleBadge ? (
+              <span data-export-hide="true">
+                <AiBadge attribution={titleAttribution} />
+              </span>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -615,8 +682,13 @@ export default function ExploreMap() {
         <button className={styles.ctl} onClick={handleExport}>
           ↓ Save
         </button>
-        <button className={styles.ctl} onClick={handleShare} disabled={saving}>
-          {saving ? "Sharing…" : "↗ Share"}
+        <button
+          className={styles.ctl}
+          onClick={handleShare}
+          disabled={saving}
+          title="Publish this warren and copy a public share link"
+        >
+          {saving ? "Publishing…" : "↗ Share"}
         </button>
         <Link className={styles.ctl} href="/gallery" style={{ textDecoration: "none" }}>
           ◫ Gallery
@@ -694,7 +766,9 @@ export default function ExploreMap() {
 
       {/* connective-tissue subtitle */}
       <AnimatePresence mode="wait">
-        {subtitle ? <Subtitle key={subtitle.key} text={subtitle.text} /> : null}
+        {subtitle ? (
+          <Subtitle key={subtitle.key} text={subtitle.text} attribution={subtitle.attribution} />
+        ) : null}
       </AnimatePresence>
 
       {/* burrow card */}
@@ -710,7 +784,6 @@ export default function ExploreMap() {
             onChip={handleChip}
             onClose={() => setSelectedId(null)}
             onHopTo={handleHopTo}
-            onHighlight={handleHighlight}
           />
         ) : null}
       </AnimatePresence>

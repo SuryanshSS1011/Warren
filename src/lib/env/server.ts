@@ -30,6 +30,14 @@ const ServerEnv = z.object({
   // Shared secret the browser extension sends to POST /api/extension/hop. When unset, the
   // extension write bridge is disabled (the endpoint returns 503).
   WARREN_EXTENSION_TOKEN: z.string().min(1).optional(),
+  // LemonSqueezy billing (Phase 2). All optional — when unset, billing is disabled: checkout
+  // is unavailable and the webhook returns 503. API key for creating checkouts; webhook
+  // secret to verify inbound webhook HMAC signatures; store id + variant ids per tier.
+  LEMONSQUEEZY_API_KEY: z.string().min(1).optional(),
+  LEMONSQUEEZY_WEBHOOK_SECRET: z.string().min(1).optional(),
+  LEMONSQUEEZY_STORE_ID: z.string().min(1).optional(),
+  LEMONSQUEEZY_VARIANT_PRO: z.string().min(1).optional(),
+  LEMONSQUEEZY_VARIANT_RESEARCHER: z.string().min(1).optional(),
 });
 
 let cached: z.infer<typeof ServerEnv> | undefined;

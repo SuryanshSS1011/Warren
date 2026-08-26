@@ -61,7 +61,9 @@ export async function saveWarren(
         title: snapshot.title,
         spine: snapshot.spine,
         started_at: new Date(snapshot.startedAt).toISOString(),
-        is_public: true,
+        // Private by default — reading trails are intellectual-privacy data (PRODUCT_PLAN
+        // §1.5). Publishing is an explicit, opt-in act via publishWarren().
+        is_public: false,
         stats: snapshot.stats,
       })
       .select("id")
@@ -106,43 +108,116 @@ export async function saveWarren(
   return { id: warrenId };
 }
 
-// React.cache dedupes the fetch across generateMetadata + page + opengraph-image.
-export const loadWarren = cache(async (id: string): Promise<SavedWarren | null> => {
-  const db = getAdminClient();
-  if (!db) return null;
+export type Viewer = { anonId?: string; userId?: string };
 
-  const { data: w, error } = await db
+// React.cache dedupes the fetch across generateMetadata + page + opengraph-image.
+// A warren is visible if it's published (is_public) OR the viewer owns it — ownership is by
+// account (owner_id === userId) OR by the anonymous cookie that created it (anon_id). So both
+// an author's account and the anon session that made a trail can always see and publish it.
+export const loadWarren = cache(
+  async (id: string, viewer?: Viewer): Promise<SavedWarren | null> => {
+    const db = getAdminClient();
+    if (!db) return null;
+
+    const { data: w, error } = await db
+      .from("warren")
+      .select("id, title, spine, started_at, stats, is_public, anon_id, owner_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (error || !w) return null;
+    const isOwner =
+      (!!viewer?.anonId && w.anon_id === viewer.anonId) ||
+      (!!viewer?.userId && w.owner_id === viewer.userId);
+    if (!w.is_public && !isOwner) return null;
+
+    const [{ data: nodes }, { data: edges }] = await Promise.all([
+      db.from("node").select("id, title, category, depth").eq("warren_id", id),
+      db.from("edge").select("source, target, bridge, spine").eq("warren_id", id),
+    ]);
+
+    return {
+      id: w.id,
+      title: w.title ?? "Untitled warren",
+      spine: (w.spine ?? []) as string[],
+      startedAt: new Date(w.started_at).getTime(),
+      stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
+      isPublic: !!w.is_public,
+      isOwner,
+      nodes: (nodes ?? []).map((n) => ({
+        id: n.id,
+        title: n.title,
+        category: n.category ?? UNCATEGORIZED,
+        depth: n.depth ?? 0,
+      })),
+      edges: (edges ?? []).map((e) => ({
+        source: e.source,
+        target: e.target,
+        bridge: e.bridge ?? "",
+        spine: !!e.spine,
+      })),
+    };
+  },
+);
+
+/**
+ * Claim all warrens created anonymously under `anonId` for a newly-signed-in `ownerId`.
+ * Called from the auth callback so an anonymous user keeps everything on sign-up (Phase 1,
+ * auto-claim). Idempotent: re-running only affects rows still matching this anon_id that
+ * aren't already owned. `anon_id` is retained for continuity (the cookie still resolves as
+ * owner during the same session). Returns the number of warrens claimed.
+ */
+export async function claimAnonWarrens(anonId: string, ownerId: string): Promise<number> {
+  const db = getAdminClient();
+  if (!db) return 0;
+  if (!anonId || !ownerId) return 0;
+  const { data, error } = await db
     .from("warren")
-    .select("id, title, spine, started_at, stats, is_public")
+    .update({ owner_id: ownerId })
+    .eq("anon_id", anonId)
+    .is("owner_id", null)
+    .select("id");
+  if (error) throw new Error(`claim warrens: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+/**
+ * Flip a warren's visibility. Only the owner may publish/unpublish — ownership is by account
+ * (owner_id === userId) OR by the anonymous cookie that created it (anon_id). Returns ok:false
+ * when the warren doesn't exist or the viewer doesn't own it.
+ */
+export async function setWarrenVisibility(
+  id: string,
+  viewer: Viewer,
+  isPublic: boolean,
+): Promise<{ ok: boolean }> {
+  const db = getAdminClient();
+  if (!db) throw new PersistenceUnavailableError();
+  if (!viewer.anonId && !viewer.userId) return { ok: false };
+
+  // Verify ownership by fetching the row and comparing in JS. We do NOT interpolate the
+  // (client-controlled) anon_id cookie into a PostgREST .or() filter string — that DSL is
+  // comma/paren-delimited, so a crafted cookie could inject extra predicates and match rows
+  // the caller doesn't own. Structured .eq() + in-memory comparison is injection-proof.
+  const { data: row, error: readErr } = await db
+    .from("warren")
+    .select("id, owner_id, anon_id")
     .eq("id", id)
     .maybeSingle();
-  if (error || !w || !w.is_public) return null;
+  if (readErr) throw new Error(`set visibility (read): ${readErr.message}`);
+  if (!row) return { ok: false };
 
-  const [{ data: nodes }, { data: edges }] = await Promise.all([
-    db.from("node").select("id, title, category, depth").eq("warren_id", id),
-    db.from("edge").select("source, target, bridge, spine").eq("warren_id", id),
-  ]);
+  const owns =
+    (!!viewer.userId && row.owner_id === viewer.userId) ||
+    (!!viewer.anonId && row.anon_id === viewer.anonId);
+  if (!owns) return { ok: false };
 
-  return {
-    id: w.id,
-    title: w.title ?? "Untitled warren",
-    spine: (w.spine ?? []) as string[],
-    startedAt: new Date(w.started_at).getTime(),
-    stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
-    nodes: (nodes ?? []).map((n) => ({
-      id: n.id,
-      title: n.title,
-      category: n.category ?? UNCATEGORIZED,
-      depth: n.depth ?? 0,
-    })),
-    edges: (edges ?? []).map((e) => ({
-      source: e.source,
-      target: e.target,
-      bridge: e.bridge ?? "",
-      spine: !!e.spine,
-    })),
-  };
-});
+  const { error: updErr } = await db
+    .from("warren")
+    .update({ is_public: isPublic })
+    .eq("id", id);
+  if (updErr) throw new Error(`set visibility: ${updErr.message}`);
+  return { ok: true };
+}
 
 /** A lightweight gallery row — enough to render a mini-trail thumbnail + stats card. */
 export type WarrenCard = {
@@ -187,6 +262,54 @@ export async function listPublicWarrens(limit = 24): Promise<WarrenCard[]> {
     title: w.title ?? "Untitled warren",
     stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
     createdAt: new Date(w.created_at).getTime(),
+    trail: ((w.spine ?? []) as string[])
+      .map((nid) => nodeBy.get(`${w.id}:${nid}`))
+      .filter(Boolean) as { title: string; category: string }[],
+  }));
+}
+
+/** A My-Warrens row: a gallery card plus the private/public flag. */
+export type OwnedWarrenCard = WarrenCard & { isPublic: boolean };
+
+/**
+ * All warrens owned by an account (owner_id), newest first — for the "My warrens" page.
+ * Includes private ones (only the owner sees this list). Returns [] without Supabase.
+ */
+export async function listWarrensForOwner(
+  ownerId: string,
+  limit = 60,
+): Promise<OwnedWarrenCard[]> {
+  const db = getAdminClient();
+  if (!db || !ownerId) return [];
+
+  const { data: warrens, error } = await db
+    .from("warren")
+    .select("id, title, spine, stats, created_at, is_public")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !warrens?.length) return [];
+
+  const ids = warrens.map((w) => w.id);
+  const { data: nodes } = await db
+    .from("node")
+    .select("warren_id, id, title, category")
+    .in("warren_id", ids);
+
+  const nodeBy = new Map<string, { title: string; category: string }>();
+  for (const n of nodes ?? []) {
+    nodeBy.set(`${n.warren_id}:${n.id}`, {
+      title: n.title,
+      category: n.category ?? UNCATEGORIZED,
+    });
+  }
+
+  return warrens.map((w) => ({
+    id: w.id,
+    title: w.title ?? "Untitled warren",
+    stats: w.stats ?? { hops: 0, categories: 0, minutes: 0, stars: 1 },
+    createdAt: new Date(w.created_at).getTime(),
+    isPublic: !!w.is_public,
     trail: ((w.spine ?? []) as string[])
       .map((nid) => nodeBy.get(`${w.id}:${nid}`))
       .filter(Boolean) as { title: string; category: string }[],

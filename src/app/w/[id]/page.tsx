@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import ReplayMap from "@/components/explore/ReplayMap";
 import { loadWarren } from "@/lib/explore/repository";
+import { getUser } from "@/lib/supabase/auth";
+
+const ANON_COOKIE = "warren_anon";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -28,7 +32,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function WarrenPage({ params }: Props) {
   const { id } = await params;
-  const warren = await loadWarren(id);
+  // Pass the viewer (account user and/or anon cookie) so an owner can view (and publish)
+  // their own private warren — whether they made it signed-in or anonymously.
+  const anonId = (await cookies()).get(ANON_COOKIE)?.value;
+  const user = await getUser();
+  const warren = await loadWarren(id, { anonId, userId: user?.id });
   if (!warren) notFound();
   return <ReplayMap warren={warren} />;
 }
