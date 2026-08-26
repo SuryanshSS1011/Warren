@@ -13,7 +13,7 @@ export default defineConfig({
       "server-only": serverOnlyStub,
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
-  }
+  },
   test: {
     globals: true,
     setupFiles: ["./test/setup.ts"],
